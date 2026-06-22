@@ -1,0 +1,18 @@
+id: daprs
+name: D-APRS (GPS/APRS gateway)
+group: optional
+enabled_by_default: true
+depends_on:
+  - adn-server
+profiles:
+  - full
+git:
+  url: https://gitlab.com/C31AG/hbnet.git
+  path: ${ADN_ROOT}/D-APRS
+  branch: aprs_features
+python:
+  install: requirements
+  requirements: requirements.txt
+systemd:
+  template: daprs.service.in
+  unit: daprs.service

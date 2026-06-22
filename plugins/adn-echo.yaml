@@ -1,0 +1,16 @@
+id: adn-echo
+name: ADN Echo (PEER playback)
+group: core
+enabled_by_default: true
+depends_on:
+  - adn-server
+profiles:
+  - minimal
+  - full
+systemd:
+  template: adn-echo.service.in
+  unit: adn-echo.service
+config:
+  - template: adn-echo.example.yaml
+    dest: ${ADN_ROOT}/adn-dmr-server/adn-echo.yaml
+    merge: keep_existing

@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# ADN-Deploy entrypoint — Python from $ADN_PYENV_ROOT only (/opt/.pyenv by default).
+set -euo pipefail
+
+_SCRIPT="$(readlink -f "${BASH_SOURCE[0]}")"
+export ADN_DEPLOY_HOME="$(cd "$(dirname "$_SCRIPT")/.." && pwd)"
+
+CONF="${ADN_DEPLOY_CONF:-$ADN_DEPLOY_HOME/deploy.conf}"
+if [[ -f "$CONF" && -r "$CONF" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$CONF"
+  set +a
+fi
+
+ADN_ROOT="${ADN_ROOT:-/opt}"
+ADN_PYENV_ROOT="${ADN_PYENV_ROOT:-$ADN_ROOT/.pyenv}"
+ADN_PYTHON_VERSION="${ADN_PYTHON_VERSION:-3.13.14}"
+ADN_USER="${ADN_USER:-adn}"
+ADN_USER_HOME="${ADN_USER_HOME:-/home/$ADN_USER}"
+
+_persist_pyenv_python() {
+  local py="$1"
+  [[ -x "$py" ]] || return 0
+  [[ -f "$CONF" ]] || return 0
+  if grep -q '^ADN_PYENV_PYTHON=' "$CONF" 2>/dev/null; then
+    return 0
+  fi
+  printf '\nADN_PYENV_PYTHON="%s"\n' "$py" >>"$CONF"
+  chown root:"${ADN_USER}" "$CONF" 2>/dev/null || true
+  chmod 640 "$CONF" 2>/dev/null || true
+}
+
+_run_pyenv_bootstrap() {
+  echo "adn-deploy: bootstrapping pyenv at $ADN_PYENV_ROOT ..."
+  # shellcheck disable=SC1091
+  source "$ADN_DEPLOY_HOME/scripts/bootstrap_pyenv.sh"
+  chown -R "$ADN_USER:$ADN_USER" "$ADN_PYENV_ROOT" 2>/dev/null || true
+}
+
+_resolve_python() {
+  local py="" ver_dir
+
+  py="${ADN_PYENV_PYTHON:-}"
+  if [[ -n "$py" && -x "$py" ]] && "$py" -c "import adn_deploy" 2>/dev/null; then
+    printf '%s' "$py"
+    return 0
+  fi
+
+  py="$ADN_PYENV_ROOT/shims/python3"
+  if [[ -x "$py" ]]; then
+    py="$(readlink -f "$py" 2>/dev/null || echo "$py")"
+    if [[ -x "$py" ]] && "$py" -c "import adn_deploy" 2>/dev/null; then
+      printf '%s' "$py"
+      return 0
+    fi
+  fi
+
+  py="$ADN_PYENV_ROOT/versions/${ADN_PYTHON_VERSION}/bin/python3"
+  if [[ -x "$py" ]] && "$py" -c "import adn_deploy" 2>/dev/null; then
+    printf '%s' "$py"
+    return 0
+  fi
+
+  for ver_dir in "$ADN_PYENV_ROOT"/versions/*/bin/python3; do
+    [[ -x "$ver_dir" ]] || continue
+    if "$ver_dir" -c "import adn_deploy" 2>/dev/null; then
+      printf '%s' "$ver_dir"
+      return 0
+    fi
+  done
+
+  return 1
+}
+
+if ! PY="$(_resolve_python)" 2>/dev/null; then
+  if [[ "${1:-}" == "pyenv" ]]; then
+    _run_pyenv_bootstrap
+    _persist_pyenv_python "$(_resolve_python)" || true
+    PY="$(_resolve_python)" || {
+      echo "adn-deploy pyenv: bootstrap finished but adn_deploy import failed" >&2
+      exit 1
+    }
+    shift
+    [[ $# -gt 0 ]] || exit 0
+  else
+    echo "adn-deploy: Python not ready under $ADN_PYENV_ROOT" >&2
+    echo "  Run: adn-deploy pyenv   (installs pyenv + pip -e adn-deploy)" >&2
+    echo "  No system python / no $ADN_DEPLOY_HOME/.venv — only $ADN_PYENV_ROOT" >&2
+    exit 1
+  fi
+fi
+
+exec "$PY" -m adn_deploy "$@"

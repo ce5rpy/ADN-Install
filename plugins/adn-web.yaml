@@ -1,0 +1,11 @@
+id: adn-web
+name: ADN Web stack
+group: web
+enabled_by_default: true
+depends_on:
+  - adn-monitor
+profiles:
+  - full
+nginx:
+  template: adn-monitor.conf.in
+  site: adn-monitor

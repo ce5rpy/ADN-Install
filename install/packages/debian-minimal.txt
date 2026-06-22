@@ -1,0 +1,54 @@
+# ADN-Deploy Debian package manifest (minimal + full stack)
+# Comments and blank lines ignored by os-bootstrap.sh
+
+# A) Base
+ca-certificates
+curl
+wget
+git
+gnupg
+sudo
+ufw
+locales
+python3-yaml
+python3-pip
+python3-venv
+
+# B) pyenv build deps
+build-essential
+make
+gcc
+g++
+patch
+libssl-dev
+zlib1g-dev
+libbz2-dev
+libreadline-dev
+libsqlite3-dev
+libncurses-dev
+libxml2-dev
+libxmlsec1-dev
+libffi-dev
+liblzma-dev
+tk-dev
+uuid-dev
+libgdbm-dev
+libnss3-dev
+xz-utils
+bzip2
+
+# C) Runtime (default-libmysqlclient-dev + pkg-config build mysqlclient; libmariadb3 at import time)
+ffmpeg
+default-libmysqlclient-dev
+pkg-config
+libmariadb3
+
+# D) Web (full profile — safe on minimal install; operator may use --profile minimal)
+nginx
+mariadb-server
+mariadb-client
+unzip
+nodejs
+npm
+certbot
+python3-certbot-nginx

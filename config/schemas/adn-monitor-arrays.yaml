@@ -1,0 +1,33 @@
+config_file: ${ADN_ROOT}/adn-monitor/monitor/adn-monitor.yaml
+root_key: DASHBOARD
+collections:
+  - id: nav_links
+    title: "Navbar links"
+    items_path: nav_links.items
+    parent_fields:
+      - path: nav_links.name
+        label: "Submenu title"
+        required: true
+    item_fields:
+      - key: name
+        label: "Text"
+        required: true
+      - key: url
+        label: "URL"
+        required: true
+  - id: footer
+    title: "Footer links"
+    items_path: footer.items
+    item_fields:
+      - key: name
+        required: true
+      - key: url
+        required: true
+  - id: news
+    title: "News marquee"
+    items_path: news.items
+    item_fields:
+      - key: name
+        required: true
+      - key: url
+        required: false

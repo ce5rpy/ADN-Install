@@ -1,0 +1,35 @@
+# ADN Docker runtime — /opt/adn-docker (production; no ADN-Install on host)
+ADN_DEPLOY_DOCKER=1
+ADN_SERVER_ROOT="/opt/adn-docker"
+ADN_DOCKER_ROOT="/opt/adn-docker"
+ADN_DEPLOY_CONF="/opt/adn-docker/deploy.conf"
+ADN_DOCKER_STATE="/opt/adn-docker/state"
+ADN_DOCKER_COMPOSE_FILE="/opt/adn-docker/docker-compose.yml"
+ADN_DOCKER_ENV_FILE="/opt/adn-docker/.env"
+ADN_DOCKER_PROFILE="full"
+
+ADN_ROOT="/opt/adn-docker/state"
+ADN_DMR_SERVER_PATH="/opt/adn-docker/state/peer"
+ADN_MONITOR_PATH="/opt/adn-docker/state/monitor"
+ADN_DEPLOY_SKIP_OS_PACKAGES=1
+
+TRAEFIK_HOST_NAMES="_"
+# Filled at install (prompt) or setup wizard (sync-docker)
+ADN_SERVER_ID=""
+ADN_DASHTITLE=""
+WEB_SSL="0"
+TRAEFIK_ACME_EMAIL="admin@example.com"
+TRAEFIK_PRIMARY_DOMAIN=""
+
+MONITOR_APP_PORT="8080"
+MONITOR_APP_UPSTREAM="adn-monitor"
+HBP_PASSPHRASE="passw0rd"
+
+MYSQL_DB_NAME="hbmon"
+MYSQL_DB_USER="self_service_user"
+
+# Image tags (see .env for full image refs)
+# DOCKER_TAG_SERVER="auto"
+# DOCKER_TAG_MONITOR="auto"
+# ADN_RELEASE_CHANNEL="auto"
+DOCKER_REGISTRY="docker.io/ce5rpy"

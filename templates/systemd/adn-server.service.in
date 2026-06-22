@@ -1,0 +1,16 @@
+[Unit]
+Description=ADN DMR Peer Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=${ADN_USER}
+Type=simple
+Restart=always
+RestartSec=3
+SyslogIdentifier=adn-dmr-server
+WorkingDirectory=${ADN_DMR_SERVER_PATH}
+ExecStart=${ADN_PYENV_PYTHON} ${ADN_DMR_SERVER_PATH}/adn-server.py -c ${ADN_DMR_SERVER_PATH}/adn-server.yaml
+
+[Install]
+WantedBy=multi-user.target

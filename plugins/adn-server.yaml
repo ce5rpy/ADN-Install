@@ -1,0 +1,23 @@
+id: adn-server
+name: ADN DMR Peer Server
+group: core
+enabled_by_default: true
+depends_on:
+  - pyenv
+profiles:
+  - minimal
+  - full
+git:
+  url: https://github.com/ce5rpy/ADN-DMR-Peer-Server.git
+  path: ${ADN_ROOT}/adn-dmr-server
+  # branch: optional — clone uses GIT_BRANCH_PEER in deploy.conf (empty = remote HEAD)
+python:
+  install: requirements
+  requirements: requirements.txt
+systemd:
+  template: adn-server.service.in
+  unit: adn-server.service
+config:
+  - template: adn-server.example.yaml
+    dest: ${ADN_ROOT}/adn-dmr-server/adn-server.yaml
+    merge: keep_existing

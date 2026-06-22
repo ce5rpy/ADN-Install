@@ -1,0 +1,17 @@
+[Unit]
+Description=D-APRS
+After=network-online.target adn-server.service
+Requires=adn-server.service
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=10
+SyslogIdentifier=daprs
+WorkingDirectory=${ADN_ROOT}/D-APRS
+ExecStart=${ADN_PYENV_PYTHON} ${ADN_ROOT}/D-APRS/gps_data.py -c ${ADN_ROOT}/D-APRS/gps_data.cfg
+
+[Install]
+WantedBy=multi-user.target

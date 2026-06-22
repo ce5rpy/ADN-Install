@@ -1,0 +1,77 @@
+# ADN-Deploy configuration (copy to deploy.conf — no secrets in git)
+
+ADN_ROOT="/opt"
+ADN_DMR_SERVER_PATH="$ADN_ROOT/adn-dmr-server"
+ADN_MONITOR_PATH="$ADN_ROOT/adn-monitor"
+ADN_PYENV_ROOT="$ADN_ROOT/.pyenv"
+ADN_USER="adn"
+ADN_CREATE_USER="1"
+# Login password for new ADN_USER (default adn): prompted on /dev/tty at install, or export ADN_USER_PASSWORD for CI
+# for non-interactive install — never commit a password in deploy.conf.
+ADN_SUDO_NOPASSWD="1"
+# ADN_USER_HOME="/home/adn"
+ADN_PYTHON_VERSION="3.13.14"
+# ADN_PYENV_REINSTALL="1"  # remove $ADN_PYENV_ROOT and re-clone pyenv (destructive)
+# Set automatically by the pyenv plugin (systemd ExecStart and pip -r must match).
+# ADN_PYENV_PYTHON="$ADN_PYENV_ROOT/versions/3.13.14/bin/python3"
+# All ADN service logs: /var/log/adn-server/adn-*.log (see templates/config/deploy-overrides.yaml)
+ADN_LOG_DIR="/var/log/adn-server"
+
+GIT_URL_DEPLOY="https://github.com/ce5rpy/ADN-Install.git"
+GIT_URL_PEER="https://github.com/ce5rpy/ADN-DMR-Peer-Server.git"
+GIT_URL_MONITOR="https://github.com/ce5rpy/ADN-Monitor.git"
+GIT_URL_DAPRS="https://gitlab.com/C31AG/hbnet.git"
+# Optional git branches for ce5rpy repos. Leave unset or empty to clone/fetch the
+# remote default branch (git remote HEAD). Set only when you need a specific ref.
+# GIT_BRANCH_DEPLOY=""
+# GIT_BRANCH_PEER=""
+# GIT_BRANCH_MONITOR=""
+GIT_BRANCH_DAPRS="aprs_features"
+# DAPRS_DATA_DMR_ID="900999"  # gateway DATA_DMR_ID + peer RADIO_ID (must match)
+# DAPRS_PEER_PORT="54871"       # local UDP for hbnet peer (master stays :52555 on adn-server)
+# DAPRS_APRS_CALLSIGN="CE5RPY"  # base callsign only; login CE5RPY-10 + passcode applied automatically
+# DAPRS_APRS_SERVER="rotate.aprs2.net"
+# install.sh bootstrap uses ADN_DEPLOY_REF the same way (optional).
+# ADN_SKIP_CLONE="1"  # advanced: skip git clone (install fails if app trees are missing)
+
+NGINX_SITE_NAME="adn-monitor"
+# Dashboard hostname(s); use _ for IP-only access, or "panel.example.com _" for domain + IP. Alias lists: https://servers.adn.systems/ (see templates/config/deploy-overrides.yaml)
+# Peer SERVER_ID: set in $ADN_DMR_SERVER_PATH/adn-server.yaml (GLOBAL.SERVER_ID) via mandatory wizard — not in deploy.conf
+# HBP global passphrase for masters/peers (legacy default passw0rd). Replaces example placeholders on config init.
+HBP_PASSPHRASE="passw0rd"
+NGINX_SERVER_NAMES="_"
+NGINX_LISTEN_IP=""
+MONITOR_APP_PORT="8080"
+MONITOR_APP_UPSTREAM="127.0.0.1"
+# Legacy aliases (still read if MONITOR_APP_* unset):
+# WEBSOCKET_PORT="8080"
+# WEBSOCKET_UPSTREAM="127.0.0.1"
+
+# HTTPS panel: off until you enable SSL from the menu (Web → Enable SSL) or: adn-deploy web cert issue
+WEB_SSL="0"
+CERTBOT_EMAIL="admin@example.com"
+CERTBOT_PRIMARY_DOMAIN="example.adn.systems"
+
+MYSQL_DB_NAME="hbmon"
+MYSQL_DB_USER="self_service_user"
+# MYSQL_DB_PASSWORD — set by install (web/mysql bootstrap) if empty; synced to adn-monitor.yaml SELF_SERVICE
+# MYSQL_ROOT_PASSWORD — only if MariaDB root requires a password (Debian socket auth often needs none)
+
+UFW_ENABLE="0"
+UFW_EXTRA_TCP="80 443"
+UFW_EXTRA_UDP=""
+# Optional: space-separated IPs with full inbound allow (leave empty on new hosts)
+UFW_TRUSTED_SOURCES=""
+
+# --- Docker production (registry mode under /opt/adn-server) ---
+# ADN_DEPLOY_DOCKER="1"
+# DOCKER_TAG_SERVER="auto"
+# DOCKER_TAG_MONITOR="auto"
+# ADN_RELEASE_CHANNEL="auto"
+# DOCKER_REGISTRY="docker.io/ce5rpy"
+# ADN_IMAGE_DEPLOY_CLI="docker.io/ce5rpy/adn-deploy-cli:2.0.0"
+
+ADN_DEPLOY_STAGING="0"
+ADN_DEPLOY_PROFILE="full"
+# Install fails if web/mysql/composer/npm fail (full profile). Set to 1 to warn and continue.
+# ADN_INSTALL_WEB_OPTIONAL="0"

@@ -1,0 +1,12 @@
+id: pyenv
+name: pyenv Python
+group: bootstrap
+enabled_by_default: true
+depends_on:
+  - os-base
+profiles:
+  - minimal
+  - full
+python:
+  version: ${ADN_PYTHON_VERSION}
+  root: ${ADN_PYENV_ROOT}

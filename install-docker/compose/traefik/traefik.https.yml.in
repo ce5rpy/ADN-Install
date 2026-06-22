@@ -1,0 +1,22 @@
+# Static Traefik config — HTTPS + ACME (after: adn-docker ssl enable)
+api:
+  dashboard: false
+
+entryPoints:
+  web:
+    address: ":80"
+  websecure:
+    address: ":443"
+
+providers:
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: ${TRAEFIK_ACME_EMAIL}
+      storage: /acme/acme.json
+      httpChallenge:
+        entryPoint: web

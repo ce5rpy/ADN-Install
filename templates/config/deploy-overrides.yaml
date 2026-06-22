@@ -1,0 +1,41 @@
+# Idempotent scalar updates applied by adn-deploy on config init.
+# Hosts alias download URLs on servers.adn.systems (no /files/ path).
+# Security globals stay empty until set in adn-server.yaml (never commit secrets).
+# GLOBAL.SERVER_ID: cleared on init (example.yaml may use 73010); any real ID is valid once set.
+
+targets:
+  - path: "{ADN_DMR_SERVER_PATH}/adn-server.yaml"
+    sets:
+      GLOBAL.SERVER_ID: 0
+      GLOBAL.URL_SECURITY: ""
+      GLOBAL.PORT_SECURITY: ""
+      GLOBAL.PASS_SECURITY: ""
+      LOGGER.LOG_FILE: "{ADN_LOG_DIR}/adn-server.log"
+      ALIASES.PEER_URL: "https://servers.adn.systems/peer_ids.json"
+      ALIASES.SUBSCRIBER_URL: "https://servers.adn.systems/subscriber_ids.json"
+      ALIASES.TGID_URL: "https://servers.adn.systems/talkgroup_ids.json"
+      ALIASES.SERVER_ID_URL: "https://servers.adn.systems/server_ids.tsv"
+      ALIASES.CHECKSUM_URL: "https://servers.adn.systems/file_checksums.json"
+      SYSTEMS.D-APRS.ENABLED: true
+      SYSTEMS.D-APRS.PORT: 52555
+      SYSTEMS.D-APRS.GENERATOR: 2
+      SYSTEMS.D-APRS.ALLOW_UNREG_ID: true
+
+  - path: "{ADN_DMR_SERVER_PATH}/adn-echo.yaml"
+    sets:
+      LOGGER.LOG_FILE: "{ADN_LOG_DIR}/adn-echo.log"
+      ALIASES.PEER_URL: "https://servers.adn.systems/peer_ids.json"
+      ALIASES.SUBSCRIBER_URL: "https://servers.adn.systems/subscriber_ids.json"
+      ALIASES.TGID_URL: "https://servers.adn.systems/talkgroup_ids.json"
+      ALIASES.SERVER_ID_URL: "https://servers.adn.systems/server_ids.tsv"
+
+  - path: "{ADN_MONITOR_PATH}/monitor/adn-monitor.yaml"
+    sets:
+      LOGGER.LOG_PATH: "{ADN_LOG_DIR}"
+      ALIASES.PEER_URL: "https://servers.adn.systems/peer_ids.json"
+      ALIASES.SUBSCRIBER_URL: "https://servers.adn.systems/subscriber_ids.json"
+      ALIASES.TGID_URL: "https://servers.adn.systems/talkgroup_ids.json"
+      ALIASES.CHECKSUM_URL: "https://servers.adn.systems/file_checksums.json"
+      ALIASES.TG_LIST_URL: "https://servers.adn.systems/talkgroup_ids.json"
+      ALIASES.BRIDGE_LIST_URL: "https://servers.adn.systems/server_ids.tsv"
+

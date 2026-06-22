@@ -1,0 +1,653 @@
+#!/usr/bin/env bash
+# Production ADN Docker host CLI — /opt/adn-docker only; Python via registry adn-deploy-cli image.
+set -euo pipefail
+
+ADN_DOCKER_ROOT="${ADN_DOCKER_ROOT:-/opt/adn-docker}"
+if [[ -f "$ADN_DOCKER_ROOT/.adn-docker-root" ]]; then
+  # shellcheck disable=SC1090
+  source "$ADN_DOCKER_ROOT/.adn-docker-root"
+fi
+
+export ADN_DOCKER_ROOT
+export ADN_SERVER_ROOT="${ADN_SERVER_ROOT:-$ADN_DOCKER_ROOT}"
+export ADN_DEPLOY_MODE=registry
+export ADN_DEPLOY_DOCKER=1
+export ADN_DEPLOY_CONF="${ADN_DEPLOY_CONF:-$ADN_DOCKER_ROOT/deploy.conf}"
+export ADN_DOCKER_ENV_FILE="${ADN_DOCKER_ENV_FILE:-$ADN_DOCKER_ROOT/.env}"
+export ADN_DOCKER_COMPOSE_FILE="${ADN_DOCKER_COMPOSE_FILE:-$ADN_DOCKER_ROOT/docker-compose.yml}"
+
+[[ -f "$ADN_DOCKER_COMPOSE_FILE" ]] || {
+  echo "adn-docker: missing $ADN_DOCKER_COMPOSE_FILE — run: curl .../docker-install.sh | sudo bash" >&2
+  exit 1
+}
+
+adn_docker_root() {
+  printf '%s' "${ADN_DOCKER_ROOT:-/opt/adn-docker}"
+}
+
+adn_docker_compose() {
+  local root envf compose
+  root="$(adn_docker_root)"
+  envf="${ADN_DOCKER_ENV_FILE:-$root/.env}"
+  compose="${ADN_DOCKER_COMPOSE_FILE:-$root/docker-compose.yml}"
+  local -a files=(-f "$compose")
+  local traefik_override="${ADN_DOCKER_STATE:-$root/state}/traefik/ssl.override.yml"
+  [[ -f "$traefik_override" ]] && files+=(-f "$traefik_override")
+  if [[ ! -f "$compose" ]]; then
+    echo "docker: missing compose file: $compose" >&2
+    return 1
+  fi
+  if [[ -f "$envf" ]]; then
+    docker compose "${files[@]}" --env-file "$envf" --profile "${ADN_DOCKER_PROFILE:-full}" "$@"
+  else
+    docker compose "${files[@]}" --profile "${ADN_DOCKER_PROFILE:-full}" "$@"
+  fi
+}
+
+adn_docker_cli_image() {
+  if [[ -n "${ADN_IMAGE_DEPLOY_CLI:-}" ]]; then
+    printf '%s' "$ADN_IMAGE_DEPLOY_CLI"
+    return 0
+  fi
+  local reg="${DOCKER_REGISTRY:-docker.io/ce5rpy}"
+  reg="${reg%/}"
+  printf '%s/adn-deploy-cli:%s' "$reg" "${DOCKER_TAG:-2.0.0}"
+}
+
+adn_docker_ensure_cli_image() {
+  local img
+  img="$(adn_docker_cli_image)"
+  if docker image inspect "$img" >/dev/null 2>&1; then
+    return 0
+  fi
+  echo "  docker: pull $img"
+  docker pull "$img"
+}
+
+adn_docker_tty_available() {
+  [[ -t 0 && -t 1 ]] && return 0
+  [[ -r /dev/tty && -w /dev/tty ]] && return 0
+  return 1
+}
+
+adn_docker_run_cli() {
+  local -a run_args=(--network host)
+  local use_controlling_tty=0
+  if [[ -t 0 && -t 1 ]]; then
+    run_args+=(-it)
+  elif [[ -r /dev/tty && -w /dev/tty ]]; then
+    run_args+=(-it)
+    use_controlling_tty=1
+  else
+    run_args+=(-i)
+  fi
+
+  local root conf compose_file env_file compose_dir cli_image
+  root="$(adn_docker_root)"
+  conf="${ADN_DEPLOY_CONF:-$root/deploy.conf}"
+  compose_file="${ADN_DOCKER_COMPOSE_FILE:-$root/docker-compose.yml}"
+  env_file="${ADN_DOCKER_ENV_FILE:-$root/.env}"
+  compose_dir="$(dirname "$compose_file")"
+
+  adn_docker_ensure_cli_image || return 1
+  cli_image="$(adn_docker_cli_image)"
+
+  local -a vols=(-v /var/run/docker.sock:/var/run/docker.sock)
+  [[ -d "$compose_dir" ]] && vols+=(-v "$compose_dir:/compose:rw")
+  [[ -f "$conf" ]] && vols+=(-v "$conf:/server-root/deploy.conf:rw")
+
+  local compose_in_container="/compose/$(basename "$compose_file")"
+
+  if [[ "$use_controlling_tty" -eq 1 ]]; then
+    docker run --rm "${run_args[@]}" "${vols[@]}" \
+      -e ADN_DEPLOY_DOCKER=1 \
+      -e ADN_DEPLOY_HOME=/opt/ADN-Install \
+      -e ADN_DEPLOY_CONF=/server-root/deploy.conf \
+      -e ADN_DOCKER_STATE=/compose/state \
+      -e ADN_ROOT=/compose/state \
+      -e ADN_DMR_SERVER_PATH=/compose/state/peer \
+      -e ADN_MONITOR_PATH=/compose/state/monitor \
+      -e ADN_DOCKER_COMPOSE_FILE="$compose_in_container" \
+      -e ADN_DOCKER_ENV_FILE=/compose/.env \
+      -e ADN_DOCKER_PROFILE="${ADN_DOCKER_PROFILE:-full}" \
+      -e TRAEFIK_HTTP_PORT="${TRAEFIK_HTTP_PORT:-80}" \
+      "$cli_image" "$@" </dev/tty >/dev/tty 2>&1
+    return $?
+  fi
+
+  docker run --rm "${run_args[@]}" "${vols[@]}" \
+    -e ADN_DEPLOY_DOCKER=1 \
+    -e ADN_DEPLOY_HOME=/opt/ADN-Install \
+    -e ADN_DEPLOY_CONF=/server-root/deploy.conf \
+    -e ADN_DOCKER_STATE=/compose/state \
+    -e ADN_ROOT=/compose/state \
+    -e ADN_DMR_SERVER_PATH=/compose/state/peer \
+    -e ADN_MONITOR_PATH=/compose/state/monitor \
+    -e ADN_DOCKER_COMPOSE_FILE="$compose_in_container" \
+    -e ADN_DOCKER_ENV_FILE=/compose/.env \
+    -e ADN_DOCKER_PROFILE="${ADN_DOCKER_PROFILE:-full}" \
+    -e TRAEFIK_HTTP_PORT="${TRAEFIK_HTTP_PORT:-80}" \
+    "$cli_image" "$@"
+}
+
+adn_docker_pull_bootstrap_images() {
+  local reg tag cli srv mon
+  reg="${DOCKER_REGISTRY:-docker.io/ce5rpy}"
+  reg="${reg%/}"
+  tag="${DOCKER_TAG:-2.0.0}"
+  cli="${ADN_IMAGE_DEPLOY_CLI:-${reg}/adn-deploy-cli:${tag}}"
+  srv="${ADN_IMAGE_SERVER:-${reg}/adn-server:${tag}}"
+  mon="${ADN_IMAGE_MONITOR:-${reg}/adn-monitor:${tag}}"
+  for img in "$cli" "$srv" "$mon"; do
+    echo "  docker: pull $img"
+    docker pull "$img" || return 1
+  done
+}
+
+adn_docker_extract_file_from_image() {
+  local image="$1" container_path="$2" host_path="$3"
+  [[ -n "$image" && -n "$container_path" && -n "$host_path" ]] || return 1
+  mkdir -p "$(dirname "$host_path")"
+  if docker run --rm --entrypoint cat "$image" "$container_path" >"$host_path" 2>/dev/null \
+      && [[ -s "$host_path" ]]; then
+    return 0
+  fi
+  rm -f "$host_path"
+  return 1
+}
+
+adn_docker_resolve_stack_image() {
+  local svc="$1" env_var="$2" remote_name="$3"
+  local img="${!env_var:-$svc:local}"
+  if docker image inspect "$img" >/dev/null 2>&1; then
+    printf '%s' "$img"
+    return 0
+  fi
+  local reg="${DOCKER_REGISTRY:-docker.io/ce5rpy}"
+  reg="${reg%/}"
+  img="${reg}/${remote_name}:${DOCKER_TAG:-2.0.0}"
+  if docker image inspect "$img" >/dev/null 2>&1; then
+    printf '%s' "$img"
+    return 0
+  fi
+  return 1
+}
+
+adn_docker_extract_config_examples() {
+  local peer="${ADN_DMR_SERVER_PATH:-$(adn_docker_root)/state/peer}"
+  local mon="${ADN_MONITOR_PATH:-$(adn_docker_root)/state/monitor}"
+  local srv_img mon_img
+  mkdir -p "$peer" "$mon/monitor"
+  srv_img="$(adn_docker_resolve_stack_image adn-server ADN_IMAGE_SERVER adn-server)" || {
+    echo "  docker: adn-server image missing — build or pull bootstrap images first" >&2
+    return 1
+  }
+  mon_img="$(adn_docker_resolve_stack_image adn-monitor ADN_IMAGE_MONITOR adn-monitor)" || {
+    echo "  docker: adn-monitor image missing — build or pull bootstrap images first" >&2
+    return 1
+  }
+  local -a srv_pairs=(
+    "/opt/adn-dmr-server/adn-server.example.yaml:adn-server.example.yaml"
+    "/opt/adn-dmr-server/adn-echo.example.yaml:adn-echo.example.yaml"
+    "/opt/adn-dmr-server/adn-parrot.example.yaml:adn-parrot.example.yaml"
+  )
+  local -a mon_pairs=(
+    "/opt/adn-monitor/monitor/adn-monitor.yaml.example:adn-monitor.yaml.example"
+    "/opt/adn-monitor/monitor/adn-monitor.example.yaml:adn-monitor.example.yaml"
+  )
+  local pair src dest
+  for pair in "${srv_pairs[@]}"; do
+    src="${pair%%:*}"
+    dest="$peer/${pair##*:}"
+    [[ -f "$dest" ]] && continue
+    adn_docker_extract_file_from_image "$srv_img" "$src" "$dest" \
+      && echo "  docker: extracted $dest" || true
+  done
+  for pair in "${mon_pairs[@]}"; do
+    src="${pair%%:*}"
+    dest="$mon/monitor/${pair##*:}"
+    [[ -f "$dest" ]] && continue
+    adn_docker_extract_file_from_image "$mon_img" "$src" "$dest" \
+      && echo "  docker: extracted $dest" || true
+  done
+}
+
+adn_docker_host_config_init() {
+  echo "  docker: config init (CLI container)"
+  adn_docker_extract_config_examples || true
+  adn_docker_run_cli config init || return 1
+  adn_docker_traefik_render || true
+}
+
+adn_docker_run_mandatory_wizard() {
+  if adn_docker_run_cli wizard; then
+    return 0
+  fi
+  echo "  WARN: adn-deploy-cli image is outdated (missing 'wizard' command)" >&2
+  echo "  Rebuild: docker build -f install-docker/dockerfiles/Dockerfile.deploy-cli -t adn-deploy-cli:local . && ./install-docker/scripts/push-docker.sh" >&2
+  echo "  Then: adn-docker setup" >&2
+  return 1
+}
+
+adn_docker_precompose_setup() {
+  echo "  docker: pre-compose setup"
+  adn_docker_pull_bootstrap_images || return 1
+  adn_docker_host_config_init || return 1
+  if adn_docker_tty_available; then
+    adn_docker_run_mandatory_wizard || true
+    adn_docker_run_cli config sync-docker 2>/dev/null || true
+    adn_docker_traefik_render_reload 2>/dev/null || true
+  else
+    echo "  docker: no TTY — run later: adn-docker setup" >&2
+  fi
+}
+
+adn_docker_restart_apps() {
+  local -a svcs=(adn-server adn-echo adn-monitor)
+  if adn_docker_compose ps --services 2>/dev/null | grep -Fxq daprs; then
+    svcs+=(daprs)
+  fi
+  adn_docker_compose restart "${svcs[@]}"
+}
+
+adn_docker_after_setup() {
+  echo "  docker: applying setup ..."
+  adn_docker_run_cli config sync-docker 2>/dev/null || true
+  adn_docker_traefik_render_reload 2>/dev/null || true
+  adn_docker_restart_apps 2>/dev/null || true
+  echo "  docker: setup apply done"
+}
+
+adn_docker_registry_up() {
+  echo "adn-docker: pulling images ..."
+  adn_docker_compose pull
+  adn_docker_traefik_render || true
+  adn_docker_compose up -d "$@"
+  adn_docker_compose ps
+}
+
+adn_docker_traefik_acme_email() {
+  printf '%s' "${TRAEFIK_ACME_EMAIL:-${CERTBOT_EMAIL:-admin@localhost}}"
+}
+
+adn_docker_traefik_primary_domain() {
+  local names
+  names="$(adn_docker_traefik_host_names)"
+  printf '%s' "${TRAEFIK_PRIMARY_DOMAIN:-${CERTBOT_PRIMARY_DOMAIN:-${names%% *}}}"
+}
+
+adn_docker_traefik_host_names() {
+  printf '%s' "${TRAEFIK_HOST_NAMES:-${NGINX_SERVER_NAMES:-_}}"
+}
+
+adn_docker_traefik_is_dry_run() {
+  [[ "${ADN_DEPLOY_DRY_RUN:-0}" == "1" ]]
+}
+
+adn_docker_traefik_templates_dir() {
+  local root
+  root="$(adn_docker_root)"
+  if [[ -d "$root/state/traefik/templates" ]]; then
+    printf '%s' "$root/state/traefik/templates"
+  elif [[ -d "$root/lib/traefik" ]]; then
+    printf '%s' "$root/lib/traefik"
+  elif [[ -n "${INSTALL_DOCKER:-}" && -d "$INSTALL_DOCKER/compose/traefik" ]]; then
+    printf '%s' "$INSTALL_DOCKER/compose/traefik"
+  elif [[ -d "$root/traefik" ]]; then
+    printf '%s' "$root/traefik"
+  else
+    printf '%s' "${ADN_DEPLOY_HOME:-}/install-docker/compose/traefik"
+  fi
+}
+
+adn_docker_traefik_dir() {
+  printf '%s' "${ADN_DOCKER_STATE:-$(adn_docker_root)/state}/traefik"
+}
+
+adn_docker_traefik_host_rule() {
+  local names="${1:-$(adn_docker_traefik_host_names)}"
+  local d first=1 part
+  if [[ -z "$names" || "$names" == "_" ]]; then
+    return 0
+  fi
+  for d in $names; do
+    part="Host(\`${d}\`)"
+    if [[ "$first" -eq 1 ]]; then
+      printf '%s' "$part"
+      first=0
+    else
+      printf ' || %s' "$part"
+    fi
+  done
+}
+
+adn_docker_traefik_ssl_enabled() {
+  [[ "${WEB_SSL:-0}" == "1" ]] || return 1
+  [[ -n "$(adn_docker_traefik_host_rule)" ]] || return 1
+}
+
+adn_docker_traefik_ssl_override_path() {
+  printf '%s' "$(adn_docker_traefik_dir)/ssl.override.yml"
+}
+
+adn_docker_traefik_ssl_override_write() {
+  local tpl dest
+  tpl="$(adn_docker_traefik_templates_dir)/ssl.override.yml.in"
+  dest="$(adn_docker_traefik_ssl_override_path)"
+  [[ -f "$tpl" ]] || { echo "missing traefik ssl override template: $tpl" >&2; return 1; }
+  mkdir -p "$(dirname "$dest")"
+  if adn_docker_traefik_is_dry_run; then
+    echo "[dry-run] traefik ssl override -> $dest"
+    return 0
+  fi
+  cp "$tpl" "$dest"
+  echo "  traefik ssl override: $dest"
+}
+
+adn_docker_traefik_ssl_override_remove() {
+  local dest
+  dest="$(adn_docker_traefik_ssl_override_path)"
+  if [[ -f "$dest" ]]; then
+    if adn_docker_traefik_is_dry_run; then
+      echo "[dry-run] rm -f $dest"
+    else
+      rm -f "$dest"
+      echo "  traefik ssl override: removed"
+    fi
+  fi
+}
+
+adn_docker_traefik_render_static() {
+  local tpl dir dest email ssl_on=0
+  dir="$(adn_docker_traefik_dir)"
+  dest="$dir/traefik.yml"
+  email="$(adn_docker_traefik_acme_email)"
+  local tpl_dir
+  tpl_dir="$(adn_docker_traefik_templates_dir)"
+  if adn_docker_traefik_ssl_enabled; then
+    ssl_on=1
+    tpl="$tpl_dir/traefik.https.yml.in"
+  else
+    tpl="$tpl_dir/traefik.http.yml.in"
+  fi
+  [[ -f "$tpl" ]] || { echo "missing traefik template: $tpl" >&2; return 1; }
+  mkdir -p "$dir"
+  if adn_docker_traefik_is_dry_run; then
+    echo "[dry-run] traefik static -> $dest (ssl=$ssl_on, email=$email)"
+    return 0
+  fi
+  if [[ "$ssl_on" -eq 1 ]]; then
+    export TRAEFIK_ACME_EMAIL="$email"
+    envsubst '${TRAEFIK_ACME_EMAIL}' < "$tpl" > "$dest"
+    echo "  traefik static: $dest (HTTPS + ACME)"
+  else
+    cp "$tpl" "$dest"
+    echo "  traefik static: $dest (HTTP only)"
+  fi
+}
+
+adn_docker_traefik_render_dynamic() {
+  local dir dest host_rule app_port ssl_on=0
+  dir="$(adn_docker_traefik_dir)"
+  dest="$dir/dynamic.yml"
+  app_port="${MONITOR_APP_PORT:-8080}"
+  host_rule="$(adn_docker_traefik_host_rule)"
+  if adn_docker_traefik_ssl_enabled; then
+    ssl_on=1
+  elif [[ "${WEB_SSL:-0}" == "1" ]]; then
+    echo "  traefik: WEB_SSL=1 ignored until ssl enable with a real TRAEFIK_HOST_NAMES" >&2
+  fi
+  mkdir -p "$dir"
+
+  if adn_docker_traefik_is_dry_run; then
+    echo "[dry-run] traefik dynamic -> $dest (ssl=$ssl_on, hosts=$(adn_docker_traefik_host_names))"
+    return 0
+  fi
+
+  if [[ "$ssl_on" -eq 1 ]]; then
+    cat >"$dest" <<EOF
+http:
+  serversTransports:
+    adn-monitor-transport:
+      forwardingTimeouts:
+        responseHeaderTimeout: 0s
+        idleConnTimeout: 86400s
+
+  middlewares:
+    redirect-https:
+      redirectScheme:
+        scheme: https
+        permanent: true
+
+  routers:
+    adn-monitor-http:
+      rule: "${host_rule}"
+      entryPoints:
+        - web
+      middlewares:
+        - redirect-https
+    adn-monitor:
+      rule: "${host_rule}"
+      entryPoints:
+        - websecure
+      service: adn-monitor
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    adn-monitor:
+      loadBalancer:
+        serversTransport: adn-monitor-transport
+        servers:
+          - url: "http://adn-monitor:${app_port}"
+EOF
+  else
+    cat >"$dest" <<EOF
+http:
+  serversTransports:
+    adn-monitor-transport:
+      forwardingTimeouts:
+        responseHeaderTimeout: 0s
+        idleConnTimeout: 86400s
+
+  routers:
+    adn-monitor:
+      rule: "PathPrefix(\`/\`)"
+      entryPoints:
+        - web
+      service: adn-monitor
+
+  services:
+    adn-monitor:
+      loadBalancer:
+        serversTransport: adn-monitor-transport
+        servers:
+          - url: "http://adn-monitor:${app_port}"
+EOF
+  fi
+  echo "  traefik dynamic: $dest (ssl=$ssl_on, upstream=adn-monitor:${app_port}, ws idleConn=86400s)"
+}
+
+adn_docker_traefik_render() {
+  if adn_docker_traefik_ssl_enabled; then
+    adn_docker_traefik_ssl_override_write || return 1
+  else
+    adn_docker_traefik_ssl_override_remove
+  fi
+  adn_docker_traefik_render_static || return 1
+  adn_docker_traefik_render_dynamic || return 1
+}
+
+adn_docker_traefik_reload() {
+  if adn_docker_traefik_is_dry_run; then
+    echo "[dry-run] traefik reload (restart container)"
+    return 0
+  fi
+  if adn_docker_compose ps --status running --services 2>/dev/null | grep -Fx traefik >/dev/null; then
+    adn_docker_compose restart traefik
+    echo "  traefik: restarted"
+    return 0
+  fi
+  echo "  traefik: config updated (will apply when the stack is running)"
+}
+
+adn_docker_traefik_render_reload() {
+  adn_docker_traefik_render || return 1
+  adn_docker_traefik_reload
+}
+
+adn_docker_ssl_set_enabled() {
+  export WEB_SSL=1
+  if [[ -n "${ADN_DEPLOY_CONF:-}" ]] && declare -F adn_config_set_kv >/dev/null 2>&1; then
+    adn_config_set_kv "$ADN_DEPLOY_CONF" WEB_SSL "1"
+  fi
+}
+
+adn_docker_ssl_enable() {
+  local domains primary email
+  domains="$(adn_docker_traefik_host_names)"
+  [[ -n "$domains" && "$domains" != "_" ]] || {
+    echo "docker ssl: set TRAEFIK_HOST_NAMES in deploy.conf (real FQDN, not _)" >&2
+    return 1
+  }
+  primary="$(adn_docker_traefik_primary_domain)"
+  email="$(adn_docker_traefik_acme_email)"
+  export TRAEFIK_PRIMARY_DOMAIN="$primary"
+  export TRAEFIK_ACME_EMAIL="$email"
+  if declare -F adn_config_set_kv >/dev/null 2>&1; then
+    adn_config_set_kv "$ADN_DEPLOY_CONF" TRAEFIK_ACME_EMAIL "$email"
+    adn_config_set_kv "$ADN_DEPLOY_CONF" TRAEFIK_PRIMARY_DOMAIN "$primary"
+  fi
+
+  echo "  docker ssl: enabling HTTPS via Traefik ACME for $domains"
+  adn_docker_ssl_set_enabled
+  export WEB_SSL=1
+  adn_docker_traefik_render_reload || return 1
+  adn_docker_compose up -d traefik
+  echo "  docker ssl: HTTPS enabled (WEB_SSL=1) — port 443 published; Traefik will obtain certificates on first request"
+}
+
+adn_docker_ssl_disable() {
+  export WEB_SSL=0
+  if [[ -f "${ADN_DEPLOY_CONF:-}" ]]; then
+    if declare -F adn_config_set_kv >/dev/null 2>&1; then
+      adn_config_set_kv "$ADN_DEPLOY_CONF" WEB_SSL "0"
+    elif grep -q '^WEB_SSL=' "$ADN_DEPLOY_CONF" 2>/dev/null; then
+      sed -i 's/^WEB_SSL=.*/WEB_SSL="0"/' "$ADN_DEPLOY_CONF"
+    fi
+  fi
+  echo "  docker ssl: disabling HTTPS (HTTP only)"
+  adn_docker_traefik_render_reload || return 1
+  adn_docker_compose up -d traefik
+}
+
+adn_docker_traefik_ssl_enable() { adn_docker_ssl_enable "$@"; }
+adn_docker_traefik_ssl_disable() { adn_docker_ssl_disable "$@"; }
+
+adn_docker_load_conf() {
+  if [[ ! -f "$ADN_DEPLOY_CONF" ]]; then
+    echo "Missing $ADN_DEPLOY_CONF — run: curl -fsSL .../docker-install.sh | sudo bash" >&2
+    exit 1
+  fi
+  set -a
+  # shellcheck disable=SC1090
+  source "$ADN_DEPLOY_CONF"
+  set +a
+  if [[ -f "$ADN_DOCKER_ENV_FILE" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "$ADN_DOCKER_ENV_FILE"
+    set +a
+  fi
+}
+
+adn_docker_help() {
+  cat <<EOF
+adn-docker — ADN stack (registry, /opt/adn-docker)
+
+  adn-docker up          pull images + start stack (HTTP :80)
+  adn-docker setup       mandatory wizard (SERVER_ID, title, domain)
+  adn-docker doctor      health checks
+  adn-docker menu        full admin menu (CLI container)
+  adn-docker ps|logs|down|restart
+
+HTTPS later: adn-docker menu → ssl enable
+EOF
+}
+
+adn_docker_main() {
+  local cmd="${1:-}"; shift || true
+
+  if [[ -z "$cmd" ]]; then
+    if [[ -t 0 && -t 1 ]]; then
+      cmd="setup"
+    else
+      adn_docker_help
+      exit 0
+    fi
+  fi
+
+  case "$cmd" in
+    help|--help|-h)
+      adn_docker_help
+      exit 0
+      ;;
+  esac
+
+  adn_docker_load_conf
+
+  case "$cmd" in
+    up)
+      adn_docker_registry_up "$@"
+      ;;
+    down)
+      adn_docker_compose down "$@"
+      ;;
+    ps|logs)
+      adn_docker_compose "$cmd" "$@"
+      ;;
+    restart)
+      adn_docker_restart_apps
+      ;;
+    setup)
+      if ! adn_docker_compose ps --status running --services 2>/dev/null | grep -Fxq adn-monitor; then
+        echo "Start the stack first: adn-docker up" >&2
+        exit 1
+      fi
+      adn_docker_run_mandatory_wizard
+      adn_docker_after_setup
+      ;;
+    menu|config|doctor|plugin|preflight)
+      adn_docker_run_cli "$cmd" "$@" || exit $?
+      [[ "$cmd" == "config" || "$cmd" == "menu" ]] && adn_docker_after_setup 2>/dev/null || true
+      ;;
+    ssl|cert)
+      case "${1:-enable}" in
+        enable)
+          adn_docker_traefik_ssl_enable
+          ;;
+        disable)
+          adn_docker_traefik_ssl_disable
+          ;;
+        *)
+          adn_docker_traefik_ssl_enable
+          ;;
+      esac
+      ;;
+    traefik)
+      case "${1:-reload}" in
+        render|--render-only) adn_docker_traefik_render ;;
+        *) adn_docker_traefik_render_reload ;;
+      esac
+      ;;
+    *)
+      echo "Unknown command: $cmd" >&2
+      adn_docker_help
+      exit 1
+      ;;
+  esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  adn_docker_main "$@"
+fi

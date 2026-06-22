@@ -1,0 +1,24 @@
+id: adn-monitor
+name: ADN Monitor
+group: core
+enabled_by_default: true
+depends_on:
+  - pyenv
+  - adn-server
+profiles:
+  - minimal
+  - full
+git:
+  url: https://github.com/ce5rpy/ADN-Monitor.git
+  path: ${ADN_ROOT}/adn-monitor
+  # branch: optional — clone uses GIT_BRANCH_MONITOR in deploy.conf (empty = remote HEAD)
+python:
+  install: requirements
+  requirements: monitor/requirements.txt
+systemd:
+  template: adn-monitor.service.in
+  unit: adn-monitor.service
+config:
+  - template: adn-monitor.yaml.example
+    dest: ${ADN_ROOT}/adn-monitor/monitor/adn-monitor.yaml
+    merge: keep_existing

@@ -1,0 +1,16 @@
+[Unit]
+Description=ADN DMR Echo (PEER playback)
+After=network-online.target adn-server.service
+Requires=adn-server.service
+
+[Service]
+User=${ADN_USER}
+Type=simple
+Restart=always
+RestartSec=3
+SyslogIdentifier=adn-echo
+WorkingDirectory=${ADN_DMR_SERVER_PATH}
+ExecStart=${ADN_PYENV_PYTHON} ${ADN_DMR_SERVER_PATH}/adn-server.py --echo -c ${ADN_DMR_SERVER_PATH}/adn-echo.yaml
+
+[Install]
+WantedBy=multi-user.target

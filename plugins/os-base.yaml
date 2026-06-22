@@ -1,0 +1,11 @@
+id: os-base
+name: OS base packages
+group: bootstrap
+enabled_by_default: true
+depends_on: []
+profiles:
+  - minimal
+  - full
+os_packages:
+  - debian-minimal.txt
+  - ubuntu-minimal.txt

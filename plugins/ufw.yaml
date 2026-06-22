@@ -1,0 +1,12 @@
+id: ufw
+name: UFW firewall
+group: optional
+enabled_by_default: true
+depends_on:
+  - adn-server
+profiles:
+  - full
+script:
+  # Metadata only — runtime uses lib/ufw.sh adn_ufw_script_path() (bundled
+  # $ADN_DEPLOY_HOME/scripts/ufw_rebuild_safe.py first, then peer repo copy).
+  path: ${ADN_ROOT}/adn-dmr-server/scripts/ufw_rebuild_safe.py

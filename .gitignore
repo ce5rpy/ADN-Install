@@ -1,0 +1,65 @@
+# ADN-Deploy — do not commit host config, secrets, or runtime state.
+# Template: deploy.conf.example (committed). Live file: deploy.conf (ignored).
+
+# --- Installer config (per host) ---
+/deploy.conf
+/deploy.conf.local
+deploy.conf.local
+deploy.conf.*.local
+/deploy.conf.reference.example
+
+# --- Runtime markers (under repo when ADN_DEPLOY_HOME is the clone) ---
+.mandatory-setup-done
+.os-bootstrap-done
+.plugins-enabled
+
+# --- Docker (private build repo) ---
+install-docker/compose/state/
+install-docker/deploy.conf
+.env
+.env.*
+.env.local
+*.pem
+*.key
+*_passwords.json
+user_passwords.json
+encryption_key.secret
+keys.json
+
+# --- Backups / editor swap ---
+*.bak
+*.bak.*
+*~
+*.swp
+*.swo
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+*.egg-info/
+.venv/
+venv/
+
+# --- IDE / Cursor ---
+.cursor/
+.idea/
+.vscode/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+
+# --- Local filegen / staging trees (optional dev under repo) ---
+/staging/
+/sysroot/
+
+# Docker dev runtime
+install-docker/compose/state/
+install-docker/deploy.conf
+*.egg-info/

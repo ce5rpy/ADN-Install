@@ -1,0 +1,16 @@
+[Unit]
+Description=ADN Systems Monitor
+After=network-online.target adn-server.service
+
+[Service]
+User=${ADN_USER}
+Type=simple
+Restart=always
+RestartSec=3
+SyslogIdentifier=adn-monitor
+EnvironmentFile=-${ADN_ROOT}/adn-monitor/.env
+WorkingDirectory=${ADN_ROOT}/adn-monitor/monitor
+ExecStart=${ADN_PYENV_PYTHON} ${ADN_ROOT}/adn-monitor/monitor/monitor.py
+
+[Install]
+WantedBy=multi-user.target

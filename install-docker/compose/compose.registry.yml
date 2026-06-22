@@ -1,0 +1,141 @@
+# ADN stack — production (pull from registry). Materialized to /opt/adn-docker/docker-compose.yml.
+# No local build. Set image names in .env (DOCKER_REGISTRY + DOCKER_TAG=2.0.0).
+
+name: adn
+
+services:
+  mariadb:
+    container_name: adn-mariadb
+    image: mariadb:11
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${MYSQL_DB_NAME:-hbmon}
+      MARIADB_USER: ${MYSQL_DB_USER:-self_service_user}
+      MARIADB_PASSWORD: ${MYSQL_DB_PASSWORD:?set MYSQL_DB_PASSWORD in .env}
+      MARIADB_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-adn-root-change-me}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    networks: [adn]
+
+  adn-server:
+    container_name: adn-server
+    image: ${ADN_IMAGE_SERVER:-adn-server:local}
+    pull_policy: always
+    restart: unless-stopped
+    command: ["server"]
+    volumes:
+      - ${ADN_DOCKER_STATE:-./state}:/docker-state:ro
+      - ${ADN_DOCKER_STATE:-./state}/logs:/docker-state/logs:rw
+    environment:
+      ADN_DOCKER_STATE: /docker-state
+      MYSQL_HOST: mariadb
+      MYSQL_PORT: "3306"
+      MYSQL_DB_NAME: ${MYSQL_DB_NAME:-hbmon}
+      MYSQL_DB_USER: ${MYSQL_DB_USER:-self_service_user}
+      MYSQL_DB_PASSWORD: ${MYSQL_DB_PASSWORD}
+      MARIADB_PASSWORD: ${MYSQL_DB_PASSWORD}
+      ADN_LOG_LEVEL: ${ADN_LOG_LEVEL:-}
+    networks: [adn]
+
+  adn-echo:
+    container_name: adn-echo
+    image: ${ADN_IMAGE_SERVER:-adn-server:local}
+    pull_policy: always
+    restart: unless-stopped
+    command: ["echo"]
+    volumes:
+      - ${ADN_DOCKER_STATE:-./state}:/docker-state:ro
+      - ${ADN_DOCKER_STATE:-./state}/logs:/docker-state/logs:rw
+    environment:
+      ADN_DOCKER_STATE: /docker-state
+      ADN_SERVER_HOST: adn-server
+      HBP_PASSPHRASE: ${HBP_PASSPHRASE:-passw0rd}
+      MYSQL_HOST: mariadb
+      MYSQL_DB_NAME: ${MYSQL_DB_NAME:-hbmon}
+      MYSQL_DB_USER: ${MYSQL_DB_USER:-self_service_user}
+      MYSQL_DB_PASSWORD: ${MYSQL_DB_PASSWORD}
+      MARIADB_PASSWORD: ${MYSQL_DB_PASSWORD}
+      ADN_LOG_LEVEL: ${ADN_LOG_LEVEL:-}
+    depends_on:
+      adn-server:
+        condition: service_started
+    networks: [adn]
+
+  adn-monitor:
+    container_name: adn-monitor
+    image: ${ADN_IMAGE_MONITOR:-adn-monitor:local}
+    pull_policy: always
+    restart: unless-stopped
+    volumes:
+      - ${ADN_DOCKER_STATE:-./state}:/docker-state:rw
+    environment:
+      ADN_DOCKER_STATE: /docker-state
+      ADN_MONITOR_PATH: /opt/adn-monitor
+      MYSQL_HOST: mariadb
+      MYSQL_PORT: "3306"
+      MYSQL_DB_NAME: ${MYSQL_DB_NAME:-hbmon}
+      MYSQL_DB_USER: ${MYSQL_DB_USER:-self_service_user}
+      MYSQL_DB_PASSWORD: ${MYSQL_DB_PASSWORD}
+      MARIADB_PASSWORD: ${MYSQL_DB_PASSWORD}
+      MONITOR_APP_PORT: ${MONITOR_APP_PORT:-8080}
+      ADN_SERVER_HOST: adn-server
+      ADN_LOG_LEVEL: ${ADN_LOG_LEVEL:-}
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:${MONITOR_APP_PORT:-8080}/api/health', timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 210s
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      adn-server:
+        condition: service_started
+    networks: [adn]
+
+  daprs:
+    profiles: [full]
+    container_name: adn-daprs
+    image: ${ADN_IMAGE_DAPRS:-daprs:local}
+    pull_policy: always
+    restart: unless-stopped
+    volumes:
+      - ${ADN_DOCKER_STATE:-./state}:/docker-state:ro
+      - ${ADN_DOCKER_STATE:-./state}/daprs:/docker-state/daprs:rw
+      - ${ADN_DOCKER_STATE:-./state}/logs:/docker-state/logs:rw
+    environment:
+      ADN_DOCKER_STATE: /docker-state
+      ADN_SERVER_HOST: adn-server
+    depends_on:
+      adn-server:
+        condition: service_started
+    networks: [adn]
+
+  traefik:
+    container_name: adn-traefik
+    image: traefik:v3.3
+    restart: unless-stopped
+    ports:
+      - "${TRAEFIK_HTTP_PORT:-80}:80"
+    volumes:
+      - ${TRAEFIK_CONFIG_DIR:-./state/traefik}/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ${TRAEFIK_CONFIG_DIR:-./state/traefik}/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - traefik_acme:/acme
+    depends_on:
+      adn-monitor:
+        condition: service_healthy
+    networks: [adn]
+
+networks:
+  adn:
+    driver: bridge
+
+volumes:
+  mariadb_data:
+  traefik_acme:
