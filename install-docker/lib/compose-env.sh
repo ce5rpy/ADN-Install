@@ -39,6 +39,8 @@ adn_docker_require_env_file() {
 adn_docker_compose_files() {
   local -a files=(-f "$ADN_COMPOSE_FILE")
   [[ -f "$ADN_COMPOSE_DIR/compose.override.yml" ]] && files+=(-f "$ADN_COMPOSE_DIR/compose.override.yml")
+  local ports_override="${ADN_DOCKER_STATE:-$ADN_COMPOSE_DIR/state}/${_ADN_DOCKER_PORTS_OVERRIDE:-adn-server-ports.override.yml}"
+  [[ -f "$ports_override" ]] && files+=(-f "$ports_override")
   local traefik_override="${ADN_DOCKER_STATE:-$ADN_COMPOSE_DIR/state}/traefik/ssl.override.yml"
   [[ -f "$traefik_override" ]] && files+=(-f "$traefik_override")
   printf '%s\n' "${files[@]}"

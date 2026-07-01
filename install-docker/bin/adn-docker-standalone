@@ -31,6 +31,8 @@ adn_docker_compose() {
   envf="${ADN_DOCKER_ENV_FILE:-$root/.env}"
   compose="${ADN_DOCKER_COMPOSE_FILE:-$root/docker-compose.yml}"
   local -a files=(-f "$compose")
+  local ports_override="${ADN_DOCKER_STATE:-$root/state}/${_ADN_DOCKER_PORTS_OVERRIDE:-adn-server-ports.override.yml}"
+  [[ -f "$ports_override" ]] && files+=(-f "$ports_override")
   local traefik_override="${ADN_DOCKER_STATE:-$root/state}/traefik/ssl.override.yml"
   [[ -f "$traefik_override" ]] && files+=(-f "$traefik_override")
   if [[ ! -f "$compose" ]]; then
