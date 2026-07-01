@@ -29,6 +29,8 @@ services:
     pull_policy: always
     restart: unless-stopped
     command: ["server"]
+    ports:
+      - "${ADN_SERVER_PORT:-62031}:62031/udp"
     volumes:
       - ${ADN_DOCKER_STATE:-./state}:/docker-state:ro
       - ${ADN_DOCKER_STATE:-./state}/logs:/docker-state/logs:rw
