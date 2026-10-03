@@ -121,8 +121,8 @@ MONITOR_APP_PORT=8080
 ADN_SERVER_PORT=62031
 HBP_PASSPHRASE=passw0rd
 
-GIT_URL_PEER=https://github.com/ce5rpy/ADN-DMR-Peer-Server.git
-GIT_URL_MONITOR=https://github.com/ce5rpy/ADN-Monitor.git
+GIT_URL_PEER=https://github.com/Amateur-Digital-Network/ADN-DMR-Peer-Server.git
+GIT_URL_MONITOR=https://github.com/Amateur-Digital-Network/ADN-Monitor.git
 GIT_BRANCH_PEER=${GIT_BRANCH_PEER}
 GIT_BRANCH_MONITOR=${GIT_BRANCH_MONITOR}
 EOF

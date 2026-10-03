@@ -23,7 +23,7 @@ def normalize_base_callsign(value: str) -> str:
     raw = value.strip().upper().replace(" ", "")
     if not raw:
         raise ValueError("APRS callsign required")
-    base = raw.split("-", 1)[0]
+    base = re.split(r"[-/]", raw, maxsplit=1)[0]
     if not re.fullmatch(r"[A-Z0-9]{3,8}", base):
         raise ValueError(f"invalid callsign: {value!r}")
     return base

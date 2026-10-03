@@ -116,7 +116,9 @@ echo ""
 echo "=== [6/6] Setup wizard ==="
 if _adn_docker_mandatory_incomplete; then
   echo "  Complete mandatory setup (SERVER_ID, dashboard title, APRS if shown)."
-  if adn_docker_run_mandatory_wizard; then
+  if [[ "${ADN_DEPLOY_NON_INTERACTIVE:-0}" == "1" ]]; then
+    echo "  ADN_DEPLOY_NON_INTERACTIVE=1 — skipping wizard; run: adn-docker setup"
+  elif adn_docker_run_mandatory_wizard; then
     adn_docker_after_setup
     adn_docker_run_cli doctor || true
   else

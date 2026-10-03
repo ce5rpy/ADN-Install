@@ -24,23 +24,6 @@ def _read_os_release() -> dict[str, str]:
     return data
 
 
-def blocks_prod_install(settings: Settings) -> bool:
-    if settings.staging:
-        return False
-    if str(settings.adn_root) != "/opt":
-        return False
-    for legacy in (Path("/opt/new-adn-server"), Path("/opt/adn-dmr-server")):
-        if legacy.is_dir():
-            proc = subprocess.run(
-                ["systemctl", "is-active", "--quiet", "adn-server"],
-                capture_output=True,
-                check=False,
-            )
-            if proc.returncode == 0:
-                return True
-    return False
-
-
 def run(settings: Settings | None = None) -> bool:
     cfg = settings or init_env()
     errors = 0
@@ -110,10 +93,6 @@ def run(settings: Settings | None = None) -> bool:
         print(f"WARN: less than 10 GB free on {cfg.adn_root}")
     else:
         print(f"OK: disk space on {cfg.adn_root}")
-
-    if blocks_prod_install(cfg):
-        print("FAIL: production ADN stack detected; use ADN_DEPLOY_STAGING=1 and ADN_ROOT≠/opt", file=sys.stderr)
-        errors += 1
 
     if cfg.staging:
         print("OK: staging mode (no system-wide apt/systemd/nginx)")

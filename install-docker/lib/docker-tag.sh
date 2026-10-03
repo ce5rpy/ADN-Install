@@ -32,6 +32,11 @@ adn_version_git_ref() {
   printf 'v%s' "$ver"
 }
 
+adn_cli_was_overridden() {
+  local flag="_ADN_CLI_OVERRIDE_${1}"
+  [[ "${!flag:-}" == "1" ]]
+}
+
 adn_release_channel_matches() {
   local ver="$1" channel="$2"
   ver="$(adn_version_normalize "$ver")"
@@ -69,7 +74,7 @@ adn_git_url_to_github_slug() {
 adn_github_latest_release_tag() {
   local slug="$1" json tag
   command -v curl >/dev/null 2>&1 || return 1
-  json="$(curl -fsS --max-time 20 \
+  json="$(curl -fsSL --max-time 20 \
     -H 'Accept: application/vnd.github+json' \
     -H 'User-Agent: ADN-Deploy-resolve' \
     "https://api.github.com/repos/${slug}/releases/latest" 2>/dev/null)" || return 1
@@ -104,29 +109,25 @@ adn_git_latest_tag_for_channel() {
   printf '%s\n' "${tags[@]}" | sort -V | tail -n1
 }
 
-# Resolve one component: explicit pin, or latest remote release for channel.
+# Resolve one component: explicit semver tag, remote channel, or git branch.
 adn_resolve_component_version() {
   local tag_setting="${1:-auto}" branch="${2:-}" url="${3:-}" channel="${4:-auto}"
   local ver=""
-  local pin="${ADN_DOCKER_PIN_TAGS:-0}"
 
-  if [[ -n "$tag_setting" && "$tag_setting" != "auto" && "$pin" == "1" ]]; then
+  if [[ -n "$tag_setting" && "$tag_setting" != "auto" ]]; then
     ver="$(adn_version_normalize "$tag_setting")"
-    adn_version_is_semver_tag "$ver" || return 1
-    printf '%s' "$ver"
-    return 0
+    if adn_version_is_semver_tag "$ver"; then
+      printf '%s' "$ver"
+      return 0
+    fi
+    if [[ "${ADN_DOCKER_PIN_TAGS:-0}" == "1" ]]; then
+      return 1
+    fi
   fi
 
   if [[ "$channel" == "auto" || "$channel" == "release" || "$channel" == "latest" ]]; then
     adn_git_latest_tag_for_channel "$url" "$channel"
     return $?
-  fi
-
-  if [[ -n "$tag_setting" && "$tag_setting" != "auto" ]]; then
-    ver="$(adn_version_normalize "$tag_setting")"
-    adn_version_is_semver_tag "$ver" || return 1
-    printf '%s' "$ver"
-    return 0
   fi
 
   if [[ -n "$branch" ]]; then
@@ -156,12 +157,16 @@ adn_docker_deploy_cli_version() {
   printf '%s' "$ver"
 }
 
+# Fallback tag for components without semver releases (daprs / hbnet).
+# Fixed on purpose — must not follow the deploy-cli version (daprs:2.2.1 does not exist).
+ADN_DOCKER_FALLBACK_TAG="${ADN_DOCKER_FALLBACK_TAG:-2.0.0}"
+
 adn_docker_default_tag() {
   if [[ -n "${DOCKER_TAG_DEFAULT:-}" && "${DOCKER_TAG_DEFAULT}" != "auto" ]]; then
     adn_version_normalize "${DOCKER_TAG_DEFAULT}"
     return 0
   fi
-  adn_docker_deploy_cli_version
+  printf '%s' "$ADN_DOCKER_FALLBACK_TAG"
 }
 
 adn_docker_image_tag() {
@@ -342,8 +347,8 @@ adn_docker_refresh_latest_tag() {
 # Resolve per-component tags + git refs; export ADN_IMAGE_* when registry is set.
 adn_docker_resolve_release_vars() {
   local channel="${ADN_RELEASE_CHANNEL:-auto}"
-  local mon_url="${GIT_URL_MONITOR:-https://github.com/ce5rpy/ADN-Monitor.git}"
-  local peer_url="${GIT_URL_PEER:-https://github.com/ce5rpy/ADN-DMR-Peer-Server.git}"
+  local mon_url="${GIT_URL_MONITOR:-https://github.com/Amateur-Digital-Network/ADN-Monitor.git}"
+  local peer_url="${GIT_URL_PEER:-https://github.com/Amateur-Digital-Network/ADN-DMR-Peer-Server.git}"
   local daprs_url="${GIT_URL_DAPRS:-https://gitlab.com/C31AG/hbnet.git}"
   local mon_ver="" peer_ver="" daprs_ver="" cli_ver=""
 
@@ -377,24 +382,30 @@ adn_docker_resolve_release_vars() {
   export DOCKER_TAG_DAPRS="$daprs_ver"
   export DOCKER_TAG_DEPLOY_CLI="$cli_ver"
 
-  if [[ -z "${GIT_BRANCH_PEER:-}" ]] || adn_version_from_ref "${GIT_BRANCH_PEER}" >/dev/null 2>&1; then
-    export GIT_BRANCH_PEER="$(adn_version_git_ref "$peer_ver")"
+  if ! adn_cli_was_overridden GIT_BRANCH_PEER; then
+    if [[ -z "${GIT_BRANCH_PEER:-}" ]] || adn_version_from_ref "${GIT_BRANCH_PEER}" >/dev/null 2>&1; then
+      export GIT_BRANCH_PEER="$(adn_version_git_ref "$peer_ver")"
+    fi
   fi
-  if [[ -z "${GIT_BRANCH_MONITOR:-}" ]] || adn_version_from_ref "${GIT_BRANCH_MONITOR}" >/dev/null 2>&1; then
-    export GIT_BRANCH_MONITOR="$(adn_version_git_ref "$mon_ver")"
+  if ! adn_cli_was_overridden GIT_BRANCH_MONITOR; then
+    if [[ -z "${GIT_BRANCH_MONITOR:-}" ]] || adn_version_from_ref "${GIT_BRANCH_MONITOR}" >/dev/null 2>&1; then
+      export GIT_BRANCH_MONITOR="$(adn_version_git_ref "$mon_ver")"
+    fi
   fi
 
   if [[ -n "${DOCKER_REGISTRY:-}" || -n "${LOCAL_REGISTRY:-}" ]]; then
     adn_docker_export_image_refs
   fi
 
-  if ! adn_docker_should_tag_latest "$peer_ver" \
-      || ! adn_docker_should_tag_latest "$mon_ver" \
-      || ! adn_docker_should_tag_latest "$daprs_ver" \
-      || ! adn_docker_should_tag_latest "$cli_ver"; then
-    export BUILD_LATEST_TAG=0
-  else
-    export BUILD_LATEST_TAG=1
+  if ! adn_cli_was_overridden BUILD_LATEST_TAG; then
+    if ! adn_docker_should_tag_latest "$peer_ver" \
+        || ! adn_docker_should_tag_latest "$mon_ver" \
+        || ! adn_docker_should_tag_latest "$daprs_ver" \
+        || ! adn_docker_should_tag_latest "$cli_ver"; then
+      export BUILD_LATEST_TAG=0
+    else
+      export BUILD_LATEST_TAG=1
+    fi
   fi
 
   if [[ "${ADN_DOCKER_RESOLVE_VERBOSE:-0}" == "1" ]]; then

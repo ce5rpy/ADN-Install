@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 from adn_deploy.application import config as app_config
 from adn_deploy.application import users
 from adn_deploy.application import web
@@ -28,33 +30,37 @@ def update_deploy_toolkit(settings: Settings | None = None) -> bool:
     return True
 
 
-def update_one(settings: Settings, plugin_id: str) -> None:
-    """Update a single plugin (git pull + pip)."""
-    _update_one(settings, plugin_id)
+def update_one(settings: Settings, plugin_id: str) -> bool:
+    """Update a single plugin (git fetch/checkout configured ref + pip)."""
+    return _update_one(settings, plugin_id)
 
 
-def _update_one(settings: Settings, plugin_id: str) -> None:
+def _update_one(settings: Settings, plugin_id: str) -> bool:
     plugins = settings.paths.plugins
     if not is_plugin_enabled(plugins, settings.adn_root, plugin_id):
-        return
+        return True
     if plugin_id == "os-base":
         print("  os-base: apt update (optional)")
     elif plugin_id == "pyenv":
         os_bootstrap.bootstrap_pyenv(settings)
     elif plugin_id in ("adn-server", "adn-echo"):
-        git_repos.git_pull_peer(settings)
+        if not git_repos.git_pull_peer(settings):
+            return False
         os_bootstrap.pip_peer(settings)
     elif plugin_id == "adn-monitor":
-        git_repos.git_pull_monitor(settings)
+        if not git_repos.git_pull_monitor(settings):
+            return False
         os_bootstrap.pip_monitor(settings)
     elif plugin_id == "adn-web":
         web.update(settings)
     elif plugin_id == "daprs":
-        git_repos.git_pull_daprs(settings)
+        if not git_repos.git_pull_daprs(settings):
+            return False
         os_bootstrap.pip_daprs(settings)
         app_config.init_daprs(settings)
     elif plugin_id == "ufw":
         pass
+    return True
 
 
 def run(settings: Settings | None = None) -> bool:
@@ -63,8 +69,15 @@ def run(settings: Settings | None = None) -> bool:
     if not update_deploy_toolkit(cfg):
         return False
     order = topo_order(cfg.paths.plugins, cfg.profile)
+    peer_done = False
     for pid in order:
-        _update_one(cfg, pid)
+        if pid in ("adn-server", "adn-echo"):
+            if peer_done:  # same clone: update once
+                continue
+            peer_done = True
+        if not _update_one(cfg, pid):
+            print(f"  update: {pid} failed — services left unchanged", file=sys.stderr)
+            return False
     app_config.init_peer(cfg)
     app_config.init_echo(cfg)
     app_config.init_daprs(cfg)

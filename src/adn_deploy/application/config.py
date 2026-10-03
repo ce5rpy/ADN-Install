@@ -64,7 +64,7 @@ def yaml_set_path(settings: Settings, path: Path, key: str, value: str) -> None:
     yaml_store.yaml_set(path, key, value)
 
 
-def apply_deploy_overrides(settings: Settings, cfg_path: Path) -> None:
+def apply_deploy_overrides(settings: Settings, cfg_path: Path, *, initial: bool = False) -> None:
     manifest = deploy_overrides_manifest(settings.adn_deploy_home)
     if not manifest.is_file() or not cfg_path.is_file():
         return
@@ -80,6 +80,7 @@ def apply_deploy_overrides(settings: Settings, cfg_path: Path) -> None:
             "ADN_ROOT": str(settings.adn_root),
         },
         filter_path=cfg_path,
+        initial=initial,
     )
 
 
@@ -151,9 +152,9 @@ def init_peer(settings: Settings | None = None) -> None:
     cfg = settings or init_env()
     peer = cfg.adn_dmr_server_path
     dest = peer / "adn-server.yaml"
-    copy_if_missing(cfg, peer / "adn-server.example.yaml", dest)
+    created = copy_if_missing(cfg, peer / "adn-server.example.yaml", dest)
     if dest.is_file():
-        apply_deploy_overrides(cfg, dest)
+        apply_deploy_overrides(cfg, dest, initial=created)
         normalize_passphrases(cfg, dest)
         normalize_server_id(cfg, dest)
         sync_echo_passphrase(cfg)
@@ -169,12 +170,14 @@ def init_echo(settings: Settings | None = None) -> None:
         peer / "adn-parrot.example.yaml",
         peer / "adn-parrot.yaml.example",
     )
+    created = False
     if not dest.is_file():
         for example in examples:
             if copy_if_missing(cfg, example, dest):
+                created = True
                 break
     if dest.is_file():
-        apply_deploy_overrides(cfg, dest)
+        apply_deploy_overrides(cfg, dest, initial=created)
         normalize_passphrases(cfg, dest)
         sync_echo_passphrase(cfg)
 
@@ -186,9 +189,9 @@ def init_monitor(settings: Settings | None = None) -> None:
     if not example.is_file():
         example = mon / "adn-monitor.example.yaml"
     dest = mon / "adn-monitor.yaml"
-    copy_if_missing(cfg, example, dest)
+    created = copy_if_missing(cfg, example, dest)
     if dest.is_file():
-        apply_deploy_overrides(cfg, dest)
+        apply_deploy_overrides(cfg, dest, initial=created)
     copy_if_missing(cfg, cfg.adn_monitor_path / ".env.example", cfg.adn_monitor_path / ".env")
     normalize_env(cfg)
 
@@ -1163,6 +1166,8 @@ _DAPRS_CONFIG_KEYS = frozenset(
 def get_daprs_setting(settings: Settings, key: str) -> str:
     if key == "DAPRS_APRS_CALLSIGN":
         return daprs_aprs_default(settings)
+    if key == "DAPRS_APRS_PASSCODE":
+        return _daprs_aprs_passcode_value(settings)
     if key == "DAPRS_APRS_SERVER":
         return _daprs_aprs_server(settings)
     if key == "DAPRS_DATA_DMR_ID":
@@ -1186,28 +1191,67 @@ def set_daprs_setting(settings: Settings, key: str, value: str) -> bool:
     return True
 
 
+def _ensure_daprs_gps_cfg_file(settings: Settings) -> Path | None:
+    """Return gps_data.cfg path, creating it from template when the D-APRS tree exists."""
+    dest = daprs_cfg_path(settings)
+    if dest.is_file():
+        return dest
+    init_daprs(settings)
+    return dest if dest.is_file() else None
+
+
+def _daprs_aprs_passcode_value(settings: Settings) -> str:
+    raw = (settings.daprs_aprs_passcode or "").strip()
+    if raw:
+        return raw
+    callsign = (settings.daprs_aprs_callsign or "").strip()
+    if callsign and not is_placeholder_aprs_login(callsign):
+        try:
+            _, passcode = parse_aprs_login(callsign)
+            return str(passcode)
+        except ValueError:
+            return ""
+    return ""
+
+
 def apply_daprs_aprs_login(settings: Settings, value: str) -> bool:
     try:
         base = normalize_base_callsign(value)
         login, passcode = parse_aprs_login(base)
-    except ValueError:
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
         return False
     conf = settings.adn_deploy_conf
     assert conf is not None
-    set_kv(settings, conf, "DAPRS_APRS_CALLSIGN", base)
-    settings.daprs_aprs_callsign = base
-    settings.apply_deploy_conf(parse_deploy_conf(conf))
-    init_daprs(settings)
-    dest = daprs_cfg_path(settings)
-    if dest.is_file() and not is_dry_run(settings):
-        _patch_gps_data_aprs(
-            dest,
-            login,
-            str(passcode),
-            server=_daprs_aprs_server(settings),
-        )
-        if not settings.docker:
-            run(settings, "chown", f"{settings.adn_user}:{settings.adn_user}", str(dest), check=False)
+    try:
+        set_kv(settings, conf, "DAPRS_APRS_CALLSIGN", base)
+        set_kv(settings, conf, "DAPRS_APRS_PASSCODE", str(passcode))
+        settings.daprs_aprs_callsign = base
+        settings.daprs_aprs_passcode = str(passcode)
+        settings.apply_deploy_conf(parse_deploy_conf(conf))
+        init_daprs(settings)
+        dest = _ensure_daprs_gps_cfg_file(settings)
+        if dest and not is_dry_run(settings):
+            _patch_gps_data_aprs(
+                dest,
+                login,
+                str(passcode),
+                server=_daprs_aprs_server(settings),
+            )
+            if not settings.docker:
+                run(settings, "chown", f"{settings.adn_user}:{settings.adn_user}", str(dest), check=False)
+            print(f"  daprs: APRS-IS login {login}, passcode {passcode}")
+            print(f"  updated: {conf} + {dest}")
+        elif not is_dry_run(settings):
+            print(f"  daprs: APRS-IS login {login}, passcode {passcode}")
+            print(f"  updated: {conf}")
+            print(
+                f"  WARN: gps_data.cfg not written — D-APRS tree missing at {daprs_path(settings)}",
+                file=sys.stderr,
+            )
+    except OSError as exc:
+        print(f"Cannot save D-APRS callsign: {exc}", file=sys.stderr)
+        return False
     return True
 
 

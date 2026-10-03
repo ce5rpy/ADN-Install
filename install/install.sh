@@ -31,15 +31,6 @@ _adn_deploy() {
   "$ADN_DEPLOY_HOME/sbin/adn-deploy" "$@"
 }
 
-# Block accidental prod install on reference host layout.
-if [[ "$ADN_DEPLOY_STAGING" != "1" && "$ADN_ROOT" == "/opt" ]]; then
-  if [[ -d /opt/new-adn-server ]] && systemctl is-active --quiet adn-server 2>/dev/null; then
-    echo "install.sh: production stack detected under /opt." >&2
-    echo "Use: ADN_DEPLOY_STAGING=1 ADN_ROOT=/opt/adn-staging bash install.sh" >&2
-    exit 1
-  fi
-fi
-
 adn_install_need_bootstrap=0
 command -v curl >/dev/null 2>&1 || adn_install_need_bootstrap=1
 command -v wget >/dev/null 2>&1 || adn_install_need_bootstrap=1
@@ -165,7 +156,7 @@ _adn_wizard_needed() {
 
 _adn_tty_available() {
   [[ -t 0 && -t 1 ]] && return 0
-  [[ -r /dev/tty && -w /dev/tty ]] && return 0
+  ( : </dev/tty >/dev/tty ) 2>/dev/null && return 0
   return 1
 }
 
@@ -190,7 +181,7 @@ _adn_run_wizard() {
   unset ADN_DEPLOY_NON_INTERACTIVE
   export TERM="${TERM:-xterm-256color}"
   export ADN_DEPLOY_INSTALL_WIZARD=1
-  if [[ ! -r /dev/tty || ! -w /dev/tty ]]; then
+  if ! ( : </dev/tty >/dev/tty ) 2>/dev/null; then
     echo "  ERROR: no /dev/tty for wizard — use SSH and run: sudo adn-deploy wizard" >&2
     unset ADN_DEPLOY_INSTALL_WIZARD
     return 1

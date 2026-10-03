@@ -87,8 +87,17 @@ class VarEditScreen(InputScreen):
         label = meta.label if meta else key
         default = ""
         hint = meta.hint if meta else ""
-        if service_id == "daprs":
-            default = app_config.get_daprs_setting(settings, key) or hint
+        if self.service_id == "daprs":
+            default = app_config.get_daprs_setting(settings, key) or ""
+            if key == "DAPRS_APRS_PASSCODE":
+                field_label = f"{key}\n(read-only — set DAPRS_APRS_CALLSIGN to regenerate)"
+                super().__init__(
+                    label,
+                    field_label,
+                    default,
+                    on_submit=lambda _value: self.app.pop_screen(),
+                )
+                return
         else:
             try:
                 path = app_config.service_file(settings, service_id)
@@ -97,26 +106,22 @@ class VarEditScreen(InputScreen):
                     default = str(val) if val is not None else hint
             except (ValueError, OSError):
                 default = hint
-        super().__init__(label, key, default or hint)
+        field_label = key
+        if hint and service_id == "daprs":
+            field_label = f"{key}\n(e.g. {hint})"
+        super().__init__(label, field_label, default, on_submit=self._submit_value)
 
-    def on_button_pressed(self, event) -> None:
-        from textual.widgets import Button, Input
-
-        if not isinstance(event, Button.Pressed):
-            return
-        if event.button.id == "cancel":
-            self.action_cancel()
-            return
-        value = self.query_one("#value", Input).value.strip()
+    def _submit_value(self, value: str) -> None:
         if not value:
             self.app.notify("Value required", severity="error")
             return
         if self.service_id == "daprs":
-            _, rc, _ = capture_call(
+            text, rc, _ = capture_call(
                 lambda: app_config.set_cmd(self.settings, self.service_id, self.key, value)
             )
             if rc != 0:
-                self.app.notify("Invalid value", severity="error")
+                detail = text if text and text != "(no output)" else "Invalid value"
+                self.app.notify(detail, severity="error")
                 return
         else:
             app_config.set_cmd(self.settings, self.service_id, self.key, value)

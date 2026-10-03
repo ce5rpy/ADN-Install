@@ -107,6 +107,7 @@ KNOWN_DEPLOY_KEYS: frozenset[str] = frozenset(
         "DAPRS_DATA_DMR_ID",
         "DAPRS_PEER_PORT",
         "DAPRS_APRS_CALLSIGN",
+        "DAPRS_APRS_PASSCODE",
         "DAPRS_APRS_SERVER",
         "MYSQL_DB_NAME",
         "MYSQL_DB_USER",
@@ -190,8 +191,8 @@ class Settings:
     ufw_trusted_sources: str = ""
 
     git_url_deploy: str = "https://github.com/ce5rpy/ADN-Install.git"
-    git_url_peer: str = "https://github.com/ce5rpy/ADN-DMR-Peer-Server.git"
-    git_url_monitor: str = "https://github.com/ce5rpy/ADN-Monitor.git"
+    git_url_peer: str = "https://github.com/Amateur-Digital-Network/ADN-DMR-Peer-Server.git"
+    git_url_monitor: str = "https://github.com/Amateur-Digital-Network/ADN-Monitor.git"
     git_branch_deploy: str = ""
     git_branch_peer: str = ""
     git_branch_monitor: str = ""
@@ -201,6 +202,7 @@ class Settings:
     daprs_data_dmr_id: str = "900999"
     daprs_peer_port: str = "54871"
     daprs_aprs_callsign: str = ""
+    daprs_aprs_passcode: str = ""
     daprs_aprs_server: str = "rotate.aprs2.net"
 
     mysql_db_name: str = "hbmon"

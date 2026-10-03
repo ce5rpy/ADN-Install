@@ -40,6 +40,7 @@ _adn_github_raw_resolve() {
 _adn_fetch_curl_bundle() {
   local raw="$1" stage="$2" rel
   local -a files=(
+    pyproject.toml  # toolkit version -> adn-deploy-cli image tag (else falls back to 2.0.0)
     install-docker/scripts/install-standalone.sh
     install-docker/scripts/bootstrap-standalone.sh
     install-docker/scripts/materialize-standalone.sh

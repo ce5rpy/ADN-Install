@@ -45,6 +45,11 @@ COMMON_VARS: dict[str, list[VarMeta]] = {
             "APRS callsign (base only)",
             "CE5RPY",
         ),
+        VarMeta(
+            "DAPRS_APRS_PASSCODE",
+            "APRS-IS passcode (auto from callsign)",
+            "",
+        ),
         VarMeta("DAPRS_APRS_SERVER", "APRS-IS server", "rotate.aprs2.net"),
         VarMeta(
             "DAPRS_DATA_DMR_ID",

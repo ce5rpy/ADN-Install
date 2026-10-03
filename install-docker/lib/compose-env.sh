@@ -76,12 +76,40 @@ adn_docker_http_port() {
 # shellcheck source=install-docker/lib/docker-tag.sh
 source "$INSTALL_DOCKER/lib/docker-tag.sh"
 
+# Env vars set on the command line before adn_docker_source_env() — restored after .env load.
+_ADN_CLI_OVERRIDE_KEYS=(
+  ADN_RELEASE_CHANNEL ADN_DOCKER_PIN_TAGS
+  DOCKER_TAG_SERVER DOCKER_TAG_MONITOR DOCKER_TAG_DAPRS DOCKER_TAG_DEPLOY_CLI DOCKER_TAG_DEFAULT
+  GIT_BRANCH_PEER GIT_BRANCH_MONITOR GIT_BRANCH_DAPRS
+  BUILD_LATEST_TAG BUILD_SKIP PLATFORMS REG LOCAL_REGISTRY DOCKER_REGISTRY
+  GIT_URL_PEER GIT_URL_MONITOR GIT_URL_DAPRS
+)
+
 adn_docker_source_env() {
+  local key preserved
+
+  for key in "${_ADN_CLI_OVERRIDE_KEYS[@]}"; do
+    if [[ -n "${!key+x}" ]]; then
+      preserved="_ADN_CLI_PRESERVE_${key}"
+      export "${preserved}=${!key}"
+    fi
+  done
+
   if [[ -f "$ADN_ENV_FILE" ]]; then
     set -a
     # shellcheck disable=SC1090
     source "$ADN_ENV_FILE"
     set +a
   fi
+
+  for key in "${_ADN_CLI_OVERRIDE_KEYS[@]}"; do
+    preserved="_ADN_CLI_PRESERVE_${key}"
+    if [[ -n "${!preserved+x}" ]]; then
+      export "${key}=${!preserved}"
+      export "_ADN_CLI_OVERRIDE_${key}=1"
+      unset "$preserved"
+    fi
+  done
+
   adn_docker_resolve_release_vars
 }

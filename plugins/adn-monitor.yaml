@@ -9,7 +9,7 @@ profiles:
   - minimal
   - full
 git:
-  url: https://github.com/ce5rpy/ADN-Monitor.git
+  url: https://github.com/Amateur-Digital-Network/ADN-Monitor.git
   path: ${ADN_ROOT}/adn-monitor
   # branch: optional — clone uses GIT_BRANCH_MONITOR in deploy.conf (empty = remote HEAD)
 python:

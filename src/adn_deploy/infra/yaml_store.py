@@ -353,7 +353,10 @@ def apply_overrides(
     *,
     variables: dict[str, str] | None = None,
     filter_path: Path | None = None,
+    initial: bool = False,
 ) -> list[Path]:
+    """Apply manifest ``sets`` (every run) and ``init_sets`` (only when ``initial``,
+    i.e. the config was just created from its example — never on user configs)."""
     manifest_data = load_yaml(manifest)
     env: dict[str, str] = dict(variables or {})
     for k, v in os.environ.items():
@@ -371,7 +374,9 @@ def apply_overrides(
         if not cfg.exists():
             continue
         data = load_yaml(cfg)
-        for dotted, value in (target.get("sets") or {}).items():
+        sets = dict(target.get("init_sets") or {}) if initial else {}
+        sets.update(target.get("sets") or {})
+        for dotted, value in sets.items():
             val = expand(value, env) if isinstance(value, str) else value
             set_path(data, str(dotted), coerce_scalar_value(str(dotted), val))
         save_yaml(cfg, data)

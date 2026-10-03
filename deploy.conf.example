@@ -18,8 +18,8 @@ ADN_PYTHON_VERSION="3.13.14"
 ADN_LOG_DIR="/var/log/adn-server"
 
 GIT_URL_DEPLOY="https://github.com/ce5rpy/ADN-Install.git"
-GIT_URL_PEER="https://github.com/ce5rpy/ADN-DMR-Peer-Server.git"
-GIT_URL_MONITOR="https://github.com/ce5rpy/ADN-Monitor.git"
+GIT_URL_PEER="https://github.com/Amateur-Digital-Network/ADN-DMR-Peer-Server.git"
+GIT_URL_MONITOR="https://github.com/Amateur-Digital-Network/ADN-Monitor.git"
 GIT_URL_DAPRS="https://gitlab.com/C31AG/hbnet.git"
 # Optional git branches for ce5rpy repos. Leave unset or empty to clone/fetch the
 # remote default branch (git remote HEAD). Set only when you need a specific ref.
@@ -30,6 +30,7 @@ GIT_BRANCH_DAPRS="aprs_features"
 # DAPRS_DATA_DMR_ID="900999"  # gateway DATA_DMR_ID + peer RADIO_ID (must match)
 # DAPRS_PEER_PORT="54871"       # local UDP for hbnet peer (master stays :52555 on adn-server)
 # DAPRS_APRS_CALLSIGN="CE5RPY"  # base callsign only; login CE5RPY-10 + passcode applied automatically
+# DAPRS_APRS_PASSCODE="21932"    # auto-generated from callsign (do not edit by hand)
 # DAPRS_APRS_SERVER="rotate.aprs2.net"
 # install.sh bootstrap uses ADN_DEPLOY_REF the same way (optional).
 # ADN_SKIP_CLONE="1"  # advanced: skip git clone (install fails if app trees are missing)

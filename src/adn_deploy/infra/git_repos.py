@@ -7,11 +7,25 @@ import pwd
 import shutil
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from adn_deploy.core.env import Settings, init_env
 from adn_deploy.core.subprocess_runner import is_dry_run, run, run_as_adn
 from adn_deploy.domain.plugins import is_plugin_enabled, plugin_peer_stack_enabled
+
+# Local config/state kept inside app trees (untracked). Backed up before a git
+# ref switch and always restored afterwards, even if upstream starts tracking them.
+PEER_PRESERVE = ("adn-server.yaml", "adn-echo.yaml", "adn-parrot.yaml")
+MONITOR_PRESERVE = (".env", "backend/.env", "monitor/adn-monitor.yaml")
+DAPRS_PRESERVE = (
+    "gps_data.cfg",
+    "hblink.cfg",
+    "user_settings.txt",
+    "mailbox.json",
+    "bulletin_board.json",
+    "locations.json",
+)
 
 
 def daprs_path(settings: Settings) -> Path:
@@ -98,6 +112,152 @@ def chown_app_tree(settings: Settings, dest: Path) -> None:
         print(f"  WARN: chown on {dest} failed (install continues)", file=sys.stderr)
 
 
+def _git(settings: Settings, dest: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    """Run git in dest as ADN_USER when root (repo owner; avoids safe.directory errors)."""
+    cmd = ["git", "-C", str(dest), *args]
+    if os.geteuid() == 0 and not settings.filegen:
+        try:
+            pwd.getpwnam(settings.adn_user)
+        except KeyError:
+            pass
+        else:
+            home = settings.adn_user_home or f"/home/{settings.adn_user}"
+            cmd = ["sudo", "-u", settings.adn_user, "env", f"HOME={home}", *cmd]
+    print(f"+ {' '.join(cmd)}", file=sys.stderr)
+    return subprocess.run(cmd, check=False, capture_output=True, text=True)
+
+
+def _git_fail(label: str, what: str, proc: subprocess.CompletedProcess[str]) -> None:
+    detail = (proc.stderr or proc.stdout or "").strip()
+    print(f"  ERROR: {label}: {what}" + (f"\n    {detail}" if detail else ""), file=sys.stderr)
+
+
+def _copy_preserving_owner(src: Path, dest: Path) -> None:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.is_symlink() or dest.is_file():
+        dest.unlink()
+    shutil.copy2(src, dest, follow_symlinks=False)
+    st = src.lstat()
+    try:
+        os.lchown(dest, st.st_uid, st.st_gid)
+    except PermissionError:
+        pass
+
+
+def backup_local_config(
+    settings: Settings, dest: Path, rel_paths: tuple[str, ...], label: str
+) -> Path | None:
+    """Copy existing config files under dest to ADN_ROOT/adn-backups/<label>-<stamp>/."""
+    present = [r for r in rel_paths if (dest / r).is_symlink() or (dest / r).is_file()]
+    if not present:
+        return None
+    root = settings.adn_root / "adn-backups"
+    root.mkdir(parents=True, exist_ok=True)
+    root.chmod(0o700)  # configs hold DB passwords
+    bdir = root / f"{label}-{datetime.now():%Y%m%d-%H%M%S}"
+    for rel in present:
+        _copy_preserving_owner(dest / rel, bdir / rel)
+    print(f"  {label}: config backup -> {bdir} ({', '.join(present)})")
+    return bdir
+
+
+def restore_local_config(dest: Path, bdir: Path, label: str) -> None:
+    restored = []
+    for src in sorted(p for p in bdir.rglob("*") if p.is_symlink() or p.is_file()):
+        rel = src.relative_to(bdir)
+        _copy_preserving_owner(src, dest / rel)
+        restored.append(str(rel))
+    print(f"  {label}: config restored ({', '.join(restored)})")
+
+
+def _remote_default_branch(settings: Settings, dest: Path) -> str:
+    proc = _git(settings, dest, "ls-remote", "--symref", "origin", "HEAD")
+    for line in proc.stdout.splitlines():
+        if line.startswith("ref: refs/heads/"):
+            return line.split()[1].removeprefix("refs/heads/")
+    return ""
+
+
+def _checkout_ref(settings: Settings, dest: Path, target: str, label: str) -> bool:
+    is_branch = _git(settings, dest, "rev-parse", "-q", "--verify", f"refs/remotes/origin/{target}")
+    if is_branch.returncode == 0:
+        proc = _git(settings, dest, "checkout", target)
+        if proc.returncode != 0:
+            _git_fail(label, f"git checkout {target} failed", proc)
+            return False
+        proc = _git(settings, dest, "merge", "--ff-only", f"origin/{target}")
+        if proc.returncode != 0:
+            _git_fail(label, f"local branch {target} diverged from origin/{target} (not fast-forward)", proc)
+            return False
+        return True
+    for ref in (f"refs/tags/{target}", target):
+        if _git(settings, dest, "rev-parse", "-q", "--verify", f"{ref}^{{commit}}").returncode == 0:
+            proc = _git(settings, dest, "checkout", "--detach", ref)
+            if proc.returncode != 0:
+                _git_fail(label, f"git checkout {target} failed", proc)
+                return False
+            return True
+    print(f"  ERROR: {label}: '{target}' is not a branch, tag or commit on origin", file=sys.stderr)
+    return False
+
+
+def sync_repo_ref(
+    settings: Settings, dest: Path, ref: str, label: str, preserve: tuple[str, ...]
+) -> bool:
+    """Update an existing clone to ref (branch/tag/SHA; empty = remote default branch).
+
+    Refuses when tracked files have local edits. Config files in ``preserve`` are
+    backed up first and restored after checkout (also when checkout fails).
+    """
+    if not repo_is_git_dir(dest):
+        print(f"  {label}: {dest} is not a git repo — skip update")
+        return True
+    want = ref.strip()
+    if is_dry_run(settings):
+        print(f"[dry-run] {label}: git fetch + checkout {want or '<remote default>'} in {dest}")
+        return True
+
+    status = _git(settings, dest, "status", "--porcelain", "--untracked-files=no")
+    if status.returncode != 0:
+        _git_fail(label, f"git status failed in {dest}", status)
+        return False
+    if status.stdout.strip():
+        print(
+            f"  ERROR: {label}: local changes to tracked files in {dest} — commit or stash them first:\n"
+            + "\n".join(f"    {ln}" for ln in status.stdout.splitlines()),
+            file=sys.stderr,
+        )
+        return False
+
+    before = _git(settings, dest, "rev-parse", "--short", "HEAD").stdout.strip()
+    proc = _git(settings, dest, "fetch", "--tags", "--force", "--prune", "origin")
+    if proc.returncode != 0:
+        _git_fail(label, "git fetch origin failed", proc)
+        return False
+    target = want or _remote_default_branch(settings, dest)
+    if not target:
+        print(f"  ERROR: {label}: cannot resolve remote default branch for {dest}", file=sys.stderr)
+        return False
+
+    bdir = backup_local_config(settings, dest, preserve, label)
+    try:
+        if bdir:
+            # Untracked copies would block checkout if upstream starts tracking them.
+            for rel in preserve:
+                if (dest / rel).is_symlink() or (dest / rel).is_file():
+                    (dest / rel).unlink()
+        ok = _checkout_ref(settings, dest, target, label)
+    finally:
+        if bdir:
+            restore_local_config(dest, bdir, label)
+    if not ok:
+        return False
+    after = _git(settings, dest, "rev-parse", "--short", "HEAD").stdout.strip()
+    state = "already at" if before == after else f"{before} ->"
+    print(f"  {label}: {state} {after} ({target})")
+    return True
+
+
 def _skip_clone(settings: Settings) -> bool:
     return os.environ.get("ADN_SKIP_CLONE", "0") == "1"
 
@@ -140,10 +300,10 @@ def clone_peer(settings: Settings | None = None) -> bool:
         return True
 
     if peer_tree_ok(dest):
-        if repo_is_git_dir(dest):
-            print(f"  peer: git repo at {dest}")
-        else:
-            print(f"  peer: tree present at {dest}")
+        if repo_is_git_dir(dest) and not cfg.filegen:
+            print(f"  peer: git repo at {dest} — updating")
+            return sync_repo_ref(cfg, dest, cfg.git_branch_peer, "peer", PEER_PRESERVE)
+        print(f"  peer: tree present at {dest}")
         return True
 
     remove_incomplete_dest(cfg, dest)
@@ -189,10 +349,10 @@ def clone_monitor(settings: Settings | None = None) -> bool:
         return True
 
     if monitor_tree_ok(dest):
-        if repo_is_git_dir(dest):
-            print(f"  monitor: git repo at {dest}")
-        else:
-            print(f"  monitor: tree present at {dest}")
+        if repo_is_git_dir(dest) and not cfg.filegen:
+            print(f"  monitor: git repo at {dest} — updating")
+            return sync_repo_ref(cfg, dest, cfg.git_branch_monitor, "monitor", MONITOR_PRESERVE)
+        print(f"  monitor: tree present at {dest}")
         return True
 
     remove_incomplete_dest(cfg, dest)
@@ -244,10 +404,10 @@ def clone_daprs(settings: Settings | None = None) -> bool:
         return True
 
     if daprs_tree_ok(dest):
-        if repo_is_git_dir(dest):
-            print(f"  daprs: git repo at {dest}")
-        else:
-            print(f"  daprs: tree present at {dest}")
+        if repo_is_git_dir(dest) and not cfg.filegen:
+            print(f"  daprs: git repo at {dest} — updating")
+            return sync_repo_ref(cfg, dest, cfg.git_branch_daprs, "daprs", DAPRS_PRESERVE)
+        print(f"  daprs: tree present at {dest}")
         return True
 
     remove_incomplete_dest(cfg, dest)
@@ -360,26 +520,25 @@ def git_pull_deploy(settings: Settings | None = None) -> bool:
     return True
 
 
-def git_pull_peer(settings: Settings | None = None) -> None:
+def git_pull_peer(settings: Settings | None = None) -> bool:
     cfg = settings or init_env()
     dest = cfg.adn_dmr_server_path
-    if dest and (dest / ".git").is_dir():
-        run_as_adn(cfg, f"cd {dest} && git pull --ff-only")
+    if not dest:
+        return True
+    return sync_repo_ref(cfg, dest, cfg.git_branch_peer, "peer", PEER_PRESERVE)
 
 
-def git_pull_monitor(settings: Settings | None = None) -> None:
+def git_pull_monitor(settings: Settings | None = None) -> bool:
     cfg = settings or init_env()
     dest = cfg.adn_monitor_path
-    if dest and (dest / ".git").is_dir():
-        run_as_adn(cfg, f"cd {dest} && git pull --ff-only")
+    if not dest:
+        return True
+    return sync_repo_ref(cfg, dest, cfg.git_branch_monitor, "monitor", MONITOR_PRESERVE)
 
 
-def git_pull_daprs(settings: Settings | None = None) -> None:
+def git_pull_daprs(settings: Settings | None = None) -> bool:
     cfg = settings or init_env()
     dest = daprs_path(cfg)
-    if dest.is_dir() and (dest / ".git").is_dir():
-        branch = str(cfg.git_branch_daprs or "").strip()
-        if branch:
-            run_as_adn(cfg, f"cd {dest} && git pull --ff-only origin {branch}")
-        else:
-            run_as_adn(cfg, f"cd {dest} && git pull --ff-only")
+    if not dest.is_dir():
+        return True
+    return sync_repo_ref(cfg, dest, cfg.git_branch_daprs, "daprs", DAPRS_PRESERVE)

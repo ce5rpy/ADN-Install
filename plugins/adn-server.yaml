@@ -8,7 +8,7 @@ profiles:
   - minimal
   - full
 git:
-  url: https://github.com/ce5rpy/ADN-DMR-Peer-Server.git
+  url: https://github.com/Amateur-Digital-Network/ADN-DMR-Peer-Server.git
   path: ${ADN_ROOT}/adn-dmr-server
   # branch: optional — clone uses GIT_BRANCH_PEER in deploy.conf (empty = remote HEAD)
 python:

@@ -310,14 +310,18 @@ class AdnDeployApp(App):
         )
 
     def _submit_daprs_aprs(self, value: str) -> None:
-        if not value or not self._quiet(
+        text, rc, result = capture_call(
             lambda: app_config.apply_daprs_aprs_login(self.settings, value)
-        ):
-            self._wizard_error(
-                "Enter a valid base callsign (e.g. CE5RPY, without -SSID).",
-                self._wizard_daprs_aprs,
-            )
+        )
+        if not value or rc != 0 or result is False:
+            msg = "Enter a valid base callsign (e.g. CE5RPY, without -SSID)."
+            if text and text != "(no output)":
+                msg = f"{msg}\n\n{text}"
+            self._wizard_error(msg, self._wizard_daprs_aprs)
             return
+        from adn_deploy.core.env import init_env
+
+        self.settings = init_env()
         self._wizard_next_after_aprs()
 
     def start_mandatory_wizard(self) -> None:
