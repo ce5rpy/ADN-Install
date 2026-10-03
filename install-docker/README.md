@@ -34,10 +34,12 @@ Without a terminal (e.g. automation), set the mandatory values instead of `adn-d
 
 ```bash
 sudo adn-docker config set deploy ADN_SERVER_ID 73010
-sudo adn-docker config set monitor DASHBOARD.DASHTITLE "My server"
+sudo adn-docker config set deploy ADN_DASHTITLE "My server"
 sudo adn-docker config set deploy DAPRS_APRS_CALLSIGN N0CALL   # your APRS callsign
 sudo adn-docker doctor
 ```
+
+In Docker, `deploy.conf` is the source of truth for these values: set them with `config set deploy …`. Values written directly to the service YAMLs (`config set adn-server GLOBAL.SERVER_ID`, `config set monitor DASHBOARD.DASHTITLE`) are overwritten by `deploy.conf` on the next sync.
 
 ## Host layout
 

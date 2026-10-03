@@ -34,10 +34,12 @@ Sin terminal (por ejemplo, en automatización), define los valores obligatorios 
 
 ```bash
 sudo adn-docker config set deploy ADN_SERVER_ID 73010
-sudo adn-docker config set monitor DASHBOARD.DASHTITLE "Mi servidor"
+sudo adn-docker config set deploy ADN_DASHTITLE "Mi servidor"
 sudo adn-docker config set deploy DAPRS_APRS_CALLSIGN N0CALL   # tu indicativo APRS
 sudo adn-docker doctor
 ```
+
+En Docker, `deploy.conf` es la fuente de verdad de estos valores: defínelos con `config set deploy …`. Los valores escritos directamente en los YAML de los servicios (`config set adn-server GLOBAL.SERVER_ID`, `config set monitor DASHBOARD.DASHTITLE`) se sobrescriben con `deploy.conf` en la siguiente sincronización.
 
 ## Estructura en el host
 

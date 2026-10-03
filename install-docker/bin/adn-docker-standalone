@@ -254,6 +254,23 @@ adn_docker_restart_apps() {
     svcs+=(daprs)
   fi
   adn_docker_compose restart "${svcs[@]}"
+  adn_docker_wait_monitor_healthy
+}
+
+# The monitor entrypoint rewrites adn-monitor.yaml (shared state) while starting.
+# Wait until it is healthy so a following `config set` cannot be overwritten.
+adn_docker_wait_monitor_healthy() {
+  local timeout="${ADN_DOCKER_RESTART_WAIT:-120}" cid status elapsed=0
+  cid="$(adn_docker_compose ps -q adn-monitor 2>/dev/null | head -n1)"
+  [[ -n "$cid" ]] || return 0
+  while (( elapsed < timeout )); do
+    status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid" 2>/dev/null || echo none)"
+    [[ "$status" == healthy || "$status" == none ]] && return 0
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+  echo "  docker: adn-monitor not healthy after ${timeout}s — check: adn-docker logs adn-monitor" >&2
+  return 1
 }
 
 adn_docker_after_setup() {
