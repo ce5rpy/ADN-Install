@@ -59,7 +59,7 @@ else
   if [[ -d "$ADN_DEPLOY_HOME" && ! -d "$ADN_DEPLOY_HOME/.git" ]]; then
     echo "Using existing toolkit at $ADN_DEPLOY_HOME (no clone)."
   else
-    echo "Cloning ADN-Deploy -> $ADN_DEPLOY_HOME ..."
+    echo "Cloning ADN-Install toolkit -> $ADN_DEPLOY_HOME ..."
     if [[ -n "$ADN_DEPLOY_REF" ]]; then
       git clone --depth 1 -b "$ADN_DEPLOY_REF" "$GIT_URL_DEPLOY" "$ADN_DEPLOY_HOME"
     else

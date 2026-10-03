@@ -4,8 +4,8 @@
 # Production (GitHub — no toolkit clone):
 #   curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/docker-install.sh | sudo bash
 #
-# Dev build (full repo checkout):
-#   sudo ./docker-install.sh --dev
+# Local checkout:
+#   sudo ./docker-install.sh
 set -euo pipefail
 
 install_dev=0
@@ -68,7 +68,7 @@ if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
       if [[ -f "$_here/install-docker/docker-install.sh" ]]; then
         exec bash "$_here/install-docker/docker-install.sh" --dev "${args[@]}"
       fi
-      echo "Dev install requires ADN-Deploy private repo checkout." >&2
+      echo "--dev is not available in this checkout; run without --dev." >&2
       exit 1
     fi
     export ASSET_ROOT="$_here"

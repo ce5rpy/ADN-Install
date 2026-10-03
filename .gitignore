@@ -13,7 +13,7 @@ deploy.conf.*.local
 .os-bootstrap-done
 .plugins-enabled
 
-# --- Docker (private build repo) ---
+# --- Docker runtime state ---
 install-docker/compose/state/
 install-docker/deploy.conf
 .env
