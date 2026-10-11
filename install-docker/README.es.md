@@ -53,14 +53,16 @@ En Docker, `deploy.conf` es la fuente de verdad de estos valores: defínelos con
 
 ## Imágenes y versiones
 
-Las imágenes vienen de `docker.io/ce5rpy/*`. Cada imagen usa su propio tag, que se resuelve al instalar:
+Las imágenes vienen de `docker.io/ce5rpy/*` y usan el tag `latest`, que siempre apunta a la release más nueva de cada componente:
 
-| Imagen | Tag | Override |
-|--------|-----|----------|
-| `adn-server` | Última release de ADN-DMR-Peer-Server | `DOCKER_TAG_SERVER` |
-| `adn-monitor` | Última release de ADN-Monitor | `DOCKER_TAG_MONITOR` |
-| `daprs` | `2.0.0` | `DOCKER_TAG_DAPRS` |
-| `adn-deploy-cli` | Versión del toolkit | `DOCKER_TAG_DEPLOY_CLI` |
+| Imagen | Tag por defecto | Fijar con |
+|--------|-----------------|-----------|
+| `adn-server` | `latest` | `DOCKER_TAG_SERVER` |
+| `adn-monitor` | `latest` | `DOCKER_TAG_MONITOR` |
+| `daprs` | `latest` | `DOCKER_TAG_DAPRS` |
+| `adn-deploy-cli` | `latest` | `DOCKER_TAG_DEPLOY_CLI` |
+
+Para actualizar a las imágenes más nuevas: `sudo adn-docker up` (descarga `latest` y recrea los contenedores que cambiaron).
 
 Para fijar una versión al instalar, por ejemplo: `sudo DOCKER_TAG_SERVER=2.5.5 bash docker-install.sh`. `DOCKER_REGISTRY` permite usar otro namespace de registry.
 

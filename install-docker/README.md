@@ -53,16 +53,18 @@ In Docker, `deploy.conf` is the source of truth for these values: set them with 
 
 ## Images and versions
 
-Images come from `docker.io/ce5rpy/*`. Each image uses its own tag, resolved at install time:
+Images come from `docker.io/ce5rpy/*` and use the `latest` tag, which always points to the newest release of each component:
 
-| Image | Tag | Override |
-|-------|-----|----------|
-| `adn-server` | Latest release of ADN-DMR-Peer-Server | `DOCKER_TAG_SERVER` |
-| `adn-monitor` | Latest release of ADN-Monitor | `DOCKER_TAG_MONITOR` |
-| `daprs` | `2.0.0` | `DOCKER_TAG_DAPRS` |
-| `adn-deploy-cli` | Toolkit version | `DOCKER_TAG_DEPLOY_CLI` |
+| Image | Default tag | Pin with |
+|-------|-------------|----------|
+| `adn-server` | `latest` | `DOCKER_TAG_SERVER` |
+| `adn-monitor` | `latest` | `DOCKER_TAG_MONITOR` |
+| `daprs` | `latest` | `DOCKER_TAG_DAPRS` |
+| `adn-deploy-cli` | `latest` | `DOCKER_TAG_DEPLOY_CLI` |
 
-Pin a version at install time, e.g. `sudo DOCKER_TAG_SERVER=2.5.5 bash docker-install.sh`. `DOCKER_REGISTRY` selects another registry namespace.
+To update to the newest images: `sudo adn-docker up` (pulls `latest` and recreates the containers that changed).
+
+To pin a version at install time, for example: `sudo DOCKER_TAG_SERVER=2.5.5 bash docker-install.sh`. `DOCKER_REGISTRY` selects another registry namespace.
 
 ## Local registry test
 

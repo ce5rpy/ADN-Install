@@ -75,7 +75,6 @@ export DOCKER_REGISTRY="$registry"
 # shellcheck source=install-docker/lib/compose-env.sh
 if [[ -f "$INSTALL_DOCKER/lib/compose-env.sh" ]]; then
   source "$INSTALL_DOCKER/lib/compose-env.sh"
-  adn_docker_resolve_release_vars
 else
   _env_lib="$(mktemp)"
   _tag_lib="$(mktemp)"
@@ -85,11 +84,19 @@ else
   source "$_tag_lib"
   # shellcheck source=/dev/null
   source "$_env_lib"
-  adn_docker_resolve_release_vars
   rm -f "$_env_lib" "$_tag_lib"
 fi
 
-# Always materialize image refs for .env (resolve may skip export if registry unset in env)
+# Every image follows :latest (the newest final release of each component on the
+# registry). `adn-docker up` pulls again, so it also updates. Pin a component at
+# install time with e.g. DOCKER_TAG_SERVER=2.5.5.
+for _tag_var in DOCKER_TAG_SERVER DOCKER_TAG_MONITOR DOCKER_TAG_DAPRS DOCKER_TAG_DEPLOY_CLI; do
+  if [[ -z "${!_tag_var:-}" || "${!_tag_var}" == auto ]]; then
+    export "${_tag_var}=latest"
+  fi
+done
+
+# Always materialize image refs for .env
 adn_docker_export_image_refs "$registry"
 
 cat >"$ENV_FILE" <<EOF
@@ -123,8 +130,8 @@ HBP_PASSPHRASE=passw0rd
 
 GIT_URL_PEER=https://github.com/Amateur-Digital-Network/ADN-DMR-Peer-Server.git
 GIT_URL_MONITOR=https://github.com/Amateur-Digital-Network/ADN-Monitor.git
-GIT_BRANCH_PEER=${GIT_BRANCH_PEER}
-GIT_BRANCH_MONITOR=${GIT_BRANCH_MONITOR}
+GIT_BRANCH_PEER=${GIT_BRANCH_PEER:-}
+GIT_BRANCH_MONITOR=${GIT_BRANCH_MONITOR:-}
 EOF
 chmod 600 "$ENV_FILE"
 

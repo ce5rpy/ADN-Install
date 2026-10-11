@@ -14,6 +14,8 @@ from adn_deploy.domain.plugins import is_plugin_enabled, plugin_get
 from adn_deploy.infra.yaml_store import yaml_get
 
 
+_RELOADABLE_UNITS = ("adn-server",)
+
 _ENVSUBST_UNIT_VARS = (
     "${ADN_ROOT} ${ADN_PYENV_ROOT} ${ADN_PYENV_PYTHON} "
     "${ADN_USER} ${ADN_DMR_SERVER_PATH} ${ADN_MONITOR_PATH}"
@@ -312,9 +314,15 @@ def services_cmd(
     unit: str = "",
 ) -> int:
     cfg = settings or init_env()
-    if action not in ("start", "stop", "restart", "status", "enable", "disable"):
-        print("usage: service <start|stop|restart|status|enable|disable> [unit]", file=sys.stderr)
+    if action not in ("start", "stop", "restart", "reload", "status", "enable", "disable"):
+        print("usage: service <start|stop|restart|reload|status|enable|disable> [unit]", file=sys.stderr)
         return 1
+    if action == "reload":
+        # Only adn-server handles SIGHUP (ExecReload): hot config reload, sessions kept.
+        unit = unit or "adn-server"
+        if unit.removesuffix(".service") not in _RELOADABLE_UNITS:
+            print(f"  {unit}: reload not supported — use: adn-deploy service restart {unit}", file=sys.stderr)
+            return 1
     if action == "start" and not unit and not cfg.docker and not cfg.staging and not cfg.dry_run:
         from adn_deploy.application import config as app_config
 
@@ -348,6 +356,7 @@ def service_action_message(action: str, unit: str, rc: int, *, docker: bool = Fa
         "start": ("started", "start"),
         "stop": ("stopped", "stop"),
         "restart": ("restarted", "restart"),
+        "reload": ("reloaded", "reload"),
     }
     past, inf = verbs.get(action, ("completed", action))
     if rc != 0:

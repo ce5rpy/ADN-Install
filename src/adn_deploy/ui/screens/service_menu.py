@@ -13,14 +13,14 @@ from adn_deploy.ui.run_capture import capture_call, capture_output
 from adn_deploy.ui.widgets import MenuEntry, MenuScreen, OutputScreen
 
 
-def service_menu_entries(settings: Settings) -> list[MenuEntry]:
+def service_menu_entries(settings: Settings, service_id: str = "") -> list[MenuEntry]:
     if settings.docker:
         return [
             MenuEntry("configure", "Configure"),
             MenuEntry("restart", "Restart container"),
             MenuEntry("back", "Back to main menu"),
         ]
-    return [
+    entries = [
         MenuEntry("configure", "Configure"),
         MenuEntry("restart", "Restart"),
         MenuEntry("stop", "Stop"),
@@ -29,6 +29,9 @@ def service_menu_entries(settings: Settings) -> list[MenuEntry]:
         MenuEntry("pip", "Reinstall Python dependencies"),
         MenuEntry("back", "Back to main menu"),
     ]
+    if service_id == "adn-server":
+        entries.insert(2, MenuEntry("reload", "Reload config (no restart)"))
+    return entries
 
 
 class ServiceMenuScreen(MenuScreen):
@@ -41,7 +44,7 @@ class ServiceMenuScreen(MenuScreen):
             subtitle = f"Container {unit} — edit config, then restart to apply"
         else:
             subtitle = f"Actions for {unit}.service"
-        super().__init__(label, subtitle, service_menu_entries(settings))
+        super().__init__(label, subtitle, service_menu_entries(settings, service_id))
 
     def on_menu_action(self, action_id: str) -> None:
         if action_id == "back":
@@ -51,7 +54,7 @@ class ServiceMenuScreen(MenuScreen):
             self.app.push_screen(ConfigMenuScreen(self.settings, self.service_id))
             return
         unit = service_unit(self.service_id)
-        if action_id in ("restart", "stop", "start"):
+        if action_id in ("restart", "reload", "stop", "start"):
             if self.settings.docker and action_id == "restart":
                 capture_call(lambda: app_config.sync_docker_wizard_config(self.settings))
             rc = systemd.services_cmd(self.settings, action_id, unit)
@@ -67,6 +70,7 @@ class ServiceMenuScreen(MenuScreen):
                     "start": "Service started",
                     "stop": "Service stopped",
                     "restart": "Service restarted",
+                    "reload": "Config reloaded",
                 }.get(action_id, f"Service — {action_id}")
             self.app.push_screen(OutputScreen(title, msg))
             return

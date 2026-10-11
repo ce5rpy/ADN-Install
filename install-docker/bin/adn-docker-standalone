@@ -53,7 +53,7 @@ adn_docker_cli_image() {
   fi
   local reg="${DOCKER_REGISTRY:-docker.io/ce5rpy}"
   reg="${reg%/}"
-  printf '%s/adn-deploy-cli:%s' "$reg" "${DOCKER_TAG:-2.0.0}"
+  printf '%s/adn-deploy-cli:%s' "$reg" "${DOCKER_TAG:-latest}"
 }
 
 adn_docker_ensure_cli_image() {
@@ -136,7 +136,7 @@ adn_docker_pull_bootstrap_images() {
   local reg tag cli srv mon
   reg="${DOCKER_REGISTRY:-docker.io/ce5rpy}"
   reg="${reg%/}"
-  tag="${DOCKER_TAG:-2.0.0}"
+  tag="${DOCKER_TAG:-latest}"
   cli="${ADN_IMAGE_DEPLOY_CLI:-${reg}/adn-deploy-cli:${tag}}"
   srv="${ADN_IMAGE_SERVER:-${reg}/adn-server:${tag}}"
   mon="${ADN_IMAGE_MONITOR:-${reg}/adn-monitor:${tag}}"
@@ -167,7 +167,7 @@ adn_docker_resolve_stack_image() {
   fi
   local reg="${DOCKER_REGISTRY:-docker.io/ce5rpy}"
   reg="${reg%/}"
-  img="${reg}/${remote_name}:${DOCKER_TAG:-2.0.0}"
+  img="${reg}/${remote_name}:${DOCKER_TAG:-latest}"
   if docker image inspect "$img" >/dev/null 2>&1; then
     printf '%s' "$img"
     return 0
