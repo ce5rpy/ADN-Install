@@ -945,6 +945,9 @@ def set_cmd(settings: Settings | None, svc: str, key: str, value: str) -> int:
     if svc == "daprs":
         return 0 if set_daprs_setting(cfg, key, value) else 1
     if svc in ("deploy", "deploy.conf"):
+        if key in _DAPRS_CONFIG_KEYS:
+            # Also writes gps_data.cfg (login + passcode), not only deploy.conf.
+            return 0 if set_daprs_setting(cfg, key, value) else 1
         conf = cfg.adn_deploy_conf
         assert conf is not None
         set_kv(cfg, conf, key, value)
@@ -956,7 +959,20 @@ def set_cmd(settings: Settings | None, svc: str, key: str, value: str) -> int:
     yaml_set_path(cfg, path, key, value)
     if svc in ("adn-server", "server") and key == "GLOBAL.SERVER_ID":
         normalize_server_id(cfg, path)
+    # deploy.conf is the source of truth for these under Docker (sync copies it back
+    # into the YAMLs); keep it in step so the change is not reverted.
+    mirror = _DEPLOY_CONF_MIRRORS.get((_SERVICE_ALIASES.get(svc, svc), key))
+    if mirror and cfg.adn_deploy_conf and cfg.adn_deploy_conf.is_file():
+        set_kv(cfg, cfg.adn_deploy_conf, mirror, value.strip())
+        cfg.apply_deploy_conf(parse_deploy_conf(cfg.adn_deploy_conf))
     return 0
+
+
+_SERVICE_ALIASES = {"server": "adn-server", "adn-monitor": "monitor"}
+_DEPLOY_CONF_MIRRORS = {
+    ("adn-server", "GLOBAL.SERVER_ID"): "ADN_SERVER_ID",
+    ("monitor", "DASHBOARD.DASHTITLE"): "ADN_DASHTITLE",
+}
 
 
 def mysql_persist(settings: Settings) -> None:

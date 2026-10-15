@@ -289,6 +289,39 @@ adn_docker_registry_up() {
   adn_docker_compose ps
 }
 
+# Version of the app running in a container (read from its pyproject.toml).
+adn_docker_running_version() {
+  local container="$1" file="$2"
+  docker exec "$container" sh -c "grep -m1 '^version' '$file' 2>/dev/null" 2>/dev/null \
+    | sed -n 's/^version *= *"\([^"]*\)".*/\1/p'
+}
+
+# Pull the tags in .env (latest unless pinned), recreate what changed, show versions.
+adn_docker_update() {
+  local before_srv before_mon after_srv after_mon srv_id_before
+  srv_id_before="$(adn_docker_compose ps -q adn-server 2>/dev/null)"
+  before_srv="$(adn_docker_running_version adn-server /opt/adn-dmr-server/pyproject.toml)"
+  before_mon="$(adn_docker_running_version adn-monitor /opt/adn-monitor/pyproject.toml)"
+  echo "adn-docker: pulling images (tags from .env; latest unless pinned) ..."
+  adn_docker_compose pull || return 1
+  adn_docker_traefik_render || true
+  adn_docker_compose up -d --remove-orphans "$@" || return 1
+  # D-APRS resolves adn-server once at startup; a recreated server gets a new IP.
+  if [[ "$(adn_docker_compose ps -q adn-server 2>/dev/null)" != "$srv_id_before" ]] \
+      && adn_docker_compose ps --services 2>/dev/null | grep -Fxq daprs; then
+    echo "  adn-server was recreated — restarting daprs so it reconnects"
+    adn_docker_compose restart daprs || true
+  fi
+  adn_docker_wait_monitor_healthy || true
+  docker image prune -f >/dev/null 2>&1 || true  # superseded (dangling) layers only
+  after_srv="$(adn_docker_running_version adn-server /opt/adn-dmr-server/pyproject.toml)"
+  after_mon="$(adn_docker_running_version adn-monitor /opt/adn-monitor/pyproject.toml)"
+  echo ""
+  printf '  %-12s %s\n' "adn-server" "${before_srv:-?} -> ${after_srv:-?}"
+  printf '  %-12s %s\n' "adn-monitor" "${before_mon:-?} -> ${after_mon:-?}"
+  adn_docker_compose ps
+}
+
 adn_docker_traefik_acme_email() {
   printf '%s' "${TRAEFIK_ACME_EMAIL:-${CERTBOT_EMAIL:-admin@localhost}}"
 }
@@ -589,6 +622,7 @@ adn_docker_help() {
 adn-docker — ADN stack (registry, /opt/adn-docker)
 
   adn-docker up          pull images + start stack (HTTP :80)
+  adn-docker update      update to the newest images (latest) and show versions
   adn-docker setup       mandatory wizard (SERVER_ID, title, domain)
   adn-docker doctor      health checks
   adn-docker menu        full admin menu (CLI container)
@@ -622,6 +656,9 @@ adn_docker_main() {
   case "$cmd" in
     up)
       adn_docker_registry_up "$@"
+      ;;
+    update)
+      adn_docker_update "$@"
       ;;
     down)
       adn_docker_compose down "$@"

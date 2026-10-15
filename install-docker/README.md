@@ -62,7 +62,7 @@ Images come from `docker.io/ce5rpy/*` and use the `latest` tag, which always poi
 | `daprs` | `latest` | `DOCKER_TAG_DAPRS` |
 | `adn-deploy-cli` | `latest` | `DOCKER_TAG_DEPLOY_CLI` |
 
-To update to the newest images: `sudo adn-docker up` (pulls `latest` and recreates the containers that changed).
+To update to the newest images: `sudo adn-docker update` (pulls `latest`, recreates the containers that changed and shows the running versions).
 
 To pin a version at install time, for example: `sudo DOCKER_TAG_SERVER=2.5.5 bash docker-install.sh`. `DOCKER_REGISTRY` selects another registry namespace.
 

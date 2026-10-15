@@ -11,7 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from adn_deploy.core.env import Settings, init_env
-from adn_deploy.core.subprocess_runner import is_dry_run, run, run_as_adn
+from adn_deploy.core.subprocess_runner import is_dry_run, run
 from adn_deploy.domain.plugins import is_plugin_enabled, plugin_peer_stack_enabled
 
 # Local config/state kept inside app trees (untracked). Backed up before a git
@@ -112,17 +112,21 @@ def chown_app_tree(settings: Settings, dest: Path) -> None:
         print(f"  WARN: chown on {dest} failed (install continues)", file=sys.stderr)
 
 
-def _git(settings: Settings, dest: Path, *args: str) -> subprocess.CompletedProcess[str]:
-    """Run git in dest as ADN_USER when root (repo owner; avoids safe.directory errors)."""
+def _git(
+    settings: Settings, dest: Path, *args: str, user: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    """Run git in dest as ADN_USER (or ``user``) when root — the repo owner, which
+    avoids safe.directory errors. ``user="root"`` runs git directly."""
     cmd = ["git", "-C", str(dest), *args]
-    if os.geteuid() == 0 and not settings.filegen:
+    run_as = user or settings.adn_user
+    if os.geteuid() == 0 and not settings.filegen and run_as != "root":
         try:
-            pwd.getpwnam(settings.adn_user)
+            pw = pwd.getpwnam(run_as)
         except KeyError:
             pass
         else:
-            home = settings.adn_user_home or f"/home/{settings.adn_user}"
-            cmd = ["sudo", "-u", settings.adn_user, "env", f"HOME={home}", *cmd]
+            home = settings.adn_user_home if run_as == settings.adn_user and settings.adn_user_home else pw.pw_dir
+            cmd = ["sudo", "-u", run_as, "env", f"HOME={home}", *cmd]
     print(f"+ {' '.join(cmd)}", file=sys.stderr)
     return subprocess.run(cmd, check=False, capture_output=True, text=True)
 
@@ -497,26 +501,62 @@ def assert_install_trees(settings: Settings | None = None) -> bool:
 
 
 def git_pull_deploy(settings: Settings | None = None) -> bool:
-    """Pull latest ADN-Deploy toolkit (run as ADN_USER)."""
+    """Update the toolkit checkout to origin/<branch> (GIT_BRANCH_DEPLOY, else the
+    current branch, else the remote default branch — e.g. detached HEAD after
+    install.sh). Uses checkout -B instead of pull --ff-only, so it also works
+    when the remote history was rewritten. Ignored files (deploy.conf) are kept;
+    local edits to tracked files stop the update."""
     cfg = settings or init_env()
     dest = cfg.adn_deploy_home
     if not (dest / ".git").is_dir():
         print(f"  deploy: not a git repo at {dest} — skip git pull (use rsync to update)")
         return True
-    branch = str(cfg.git_branch_deploy or "").strip()
-    if branch:
-        print(f"  deploy: git pull origin {branch} at {dest}")
-        cmd = f"cd {dest} && git pull --ff-only origin {branch}"
-    else:
-        print(f"  deploy: git pull at {dest}")
-        cmd = f"cd {dest} && git pull --ff-only"
-    proc = run_as_adn(cfg, cmd, check=False)
-    if proc is not None and proc.returncode != 0:
+    if is_dry_run(cfg):
+        print(f"[dry-run] deploy: git fetch + checkout origin/<branch> in {dest}")
+        return True
+    try:
+        owner = pwd.getpwuid(dest.stat().st_uid).pw_name
+    except KeyError:
+        owner = None
+
+    def g(*args: str) -> subprocess.CompletedProcess[str]:
+        return _git(cfg, dest, *args, user=owner)
+
+    status = g("status", "--porcelain", "--untracked-files=no")
+    if status.returncode != 0:
+        _git_fail("deploy", f"git status failed in {dest}", status)
+        return False
+    if status.stdout.strip():
         print(
-            "  ERROR: deploy git pull failed — resolve conflicts or pull manually",
+            f"  ERROR: deploy: local changes to tracked files in {dest} — commit or stash them first:\n"
+            + "\n".join(f"    {ln}" for ln in status.stdout.splitlines()),
             file=sys.stderr,
         )
         return False
+    proc = g("fetch", "--prune", "origin")
+    if proc.returncode != 0:
+        _git_fail("deploy", "git fetch origin failed", proc)
+        return False
+    branch = str(cfg.git_branch_deploy or "").strip()
+    if not branch:
+        branch = g("symbolic-ref", "--quiet", "--short", "HEAD").stdout.strip()
+    if not branch:  # detached HEAD (install.sh checks out a SHA): follow the remote default
+        head = g("ls-remote", "--symref", "origin", "HEAD").stdout
+        branch = next(
+            (ln.split()[1].removeprefix("refs/heads/") for ln in head.splitlines() if ln.startswith("ref: refs/heads/")),
+            "",
+        )
+    if not branch or g("rev-parse", "-q", "--verify", f"refs/remotes/origin/{branch}").returncode != 0:
+        print(f"  ERROR: deploy: branch '{branch or '?'}' not found on origin for {dest}", file=sys.stderr)
+        return False
+    before = g("rev-parse", "--short", "HEAD").stdout.strip()
+    proc = g("checkout", "-q", "-B", branch, f"origin/{branch}")
+    if proc.returncode != 0:
+        _git_fail("deploy", f"git checkout {branch} failed", proc)
+        return False
+    after = g("rev-parse", "--short", "HEAD").stdout.strip()
+    state = "already at" if before == after else f"{before} ->"
+    print(f"  deploy: {state} {after} (origin/{branch})")
     return True
 
 
