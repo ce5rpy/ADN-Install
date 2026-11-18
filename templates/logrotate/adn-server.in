@@ -16,6 +16,7 @@ ${ADN_LOG_DIR}/daprs.log
     postrotate
         kill -USR2 $(systemctl show --property MainPID --value adn-server) 2>/dev/null || true
         kill -USR2 $(systemctl show --property MainPID --value adn-echo) 2>/dev/null || true
+        kill -USR2 $(systemctl show --property MainPID --value adn-odtp) 2>/dev/null || true
         kill -USR2 $(systemctl show --property MainPID --value adn-monitor) 2>/dev/null || true
         kill -USR2 $(systemctl show --property MainPID --value daprs) 2>/dev/null || true
     endscript

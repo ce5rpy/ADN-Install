@@ -34,6 +34,11 @@ targets:
       ALIASES.TGID_URL: "https://servers.adn.systems/talkgroup_ids.json"
       ALIASES.SERVER_ID_URL: "https://servers.adn.systems/server_ids.tsv"
 
+  - path: "{ADN_DMR_SERVER_PATH}/adn-odtp.yaml"
+    sets:
+      LOGGER.LOG_FILE: "{ADN_LOG_DIR}/adn-odtp.log"
+      LOGGER.LOG_HANDLERS: file-timed
+
   - path: "{ADN_MONITOR_PATH}/monitor/adn-monitor.yaml"
     sets:
       LOGGER.LOG_PATH: "{ADN_LOG_DIR}"

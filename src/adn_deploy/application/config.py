@@ -31,6 +31,8 @@ SERVICE_FILES = {
     "server": lambda s: s.adn_dmr_server_path / "adn-server.yaml",
     "adn-echo": lambda s: s.adn_dmr_server_path / "adn-echo.yaml",
     "echo": lambda s: s.adn_dmr_server_path / "adn-echo.yaml",
+    "adn-odtp": lambda s: s.adn_dmr_server_path / "adn-odtp.yaml",
+    "odtp": lambda s: s.adn_dmr_server_path / "adn-odtp.yaml",
     "adn-monitor": lambda s: s.adn_monitor_path / "monitor" / "adn-monitor.yaml",
     "monitor": lambda s: s.adn_monitor_path / "monitor" / "adn-monitor.yaml",
     "env": lambda s: s.adn_monitor_path / ".env",
@@ -180,6 +182,31 @@ def init_echo(settings: Settings | None = None) -> None:
         apply_deploy_overrides(cfg, dest, initial=created)
         normalize_passphrases(cfg, dest)
         sync_echo_passphrase(cfg)
+
+
+def odtp_example(settings: Settings) -> Path:
+    return settings.adn_dmr_server_path / "adn-odtp.example.yaml"
+
+
+def odtp_available(settings: Settings) -> bool:
+    """ODTP gateway (adn-server --odtp, server >= 2.7): plugin enabled and the tree ships it."""
+    from adn_deploy.domain.plugins import is_plugin_enabled
+
+    peer = settings.adn_dmr_server_path
+    if peer is None or not is_plugin_enabled(settings.paths.plugins, settings.adn_root, "adn-odtp"):
+        return False
+    return (peer / "adn-odtp.yaml").is_file() or odtp_example(settings).is_file()
+
+
+def init_odtp(settings: Settings | None = None) -> None:
+    cfg = settings or init_env()
+    dest = cfg.adn_dmr_server_path / "adn-odtp.yaml"
+    example = odtp_example(cfg)
+    if not dest.is_file() and not example.is_file():
+        return  # server < 2.7: no ODTP gateway in this tree
+    created = copy_if_missing(cfg, example, dest)
+    if dest.is_file():
+        apply_deploy_overrides(cfg, dest, initial=created)
 
 
 def init_monitor(settings: Settings | None = None) -> None:
@@ -504,6 +531,7 @@ def init_daprs(settings: Settings | None = None) -> None:
 def init_all(settings: Settings | None = None) -> None:
     init_peer(settings)
     init_echo(settings)
+    init_odtp(settings)
     init_monitor(settings)
     init_daprs(settings)
     ensure_alias_files(settings)
@@ -624,6 +652,7 @@ def sync_docker_wizard_config(settings: Settings | None = None) -> None:
 
     init_peer(cfg)
     init_echo(cfg)
+    init_odtp(cfg)
     init_monitor(cfg)
 
     peer = cfg.adn_dmr_server_path / "adn-server.yaml"

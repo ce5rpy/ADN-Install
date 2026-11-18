@@ -199,6 +199,30 @@ def merge_monitor_proxy_udp(
     proxy_udp_ports.add(port)
 
 
+def merge_odtp_udp(
+    udp_any: dict[str, set[int]],
+    odtp_cfg: Path,
+    *,
+    proxy_udp_bindall: set[int],
+) -> None:
+    """ODTP gateway (adn-odtp.yaml): open ODTP.LISTEN_PORT/udp for the phone apps."""
+    if not odtp_cfg.is_file():
+        return
+    data = yaml.safe_load(odtp_cfg.read_text(encoding="utf-8")) or {}
+    odtp = data.get("ODTP") or {}
+    try:
+        port = int(odtp.get("LISTEN_PORT", 54006))
+    except (TypeError, ValueError):
+        print(f"Warning: ODTP LISTEN_PORT invalid in {odtp_cfg}", file=sys.stderr)
+        return
+    dest = _proxy_ufw_dest(str(odtp.get("LISTEN_IP", "") or ""))
+    print(f">>> ODTP gateway: {odtp_cfg} (LISTEN_PORT={port}/udp)")
+    if dest is None:
+        proxy_udp_bindall.add(port)
+    else:
+        udp_any.setdefault(dest, set()).add(port)
+
+
 def _all_system_udp_ports(cfg: dict[str, Any]) -> list[int]:
     """All UDP listen ports from SYSTEMS (MASTER/PEER/OPENBRIDGE), regardless of bind IP.
 
@@ -374,6 +398,7 @@ def rebuild_firewall(
             proxy_udp_ports=proxy_udp_ports,
             adn_cfg=data,
         )
+    merge_odtp_udp(udp_any, server_cfg.parent / "adn-odtp.yaml", proxy_udp_bindall=proxy_udp_bindall)
 
     host_rules: dict[str, dict[str, list[int]]] = defaultdict(lambda: {"tcp": [], "udp": []})
     for ip, ports in udp_any.items():

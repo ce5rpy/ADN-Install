@@ -21,7 +21,7 @@ _ENVSUBST_UNIT_VARS = (
     "${ADN_USER} ${ADN_DMR_SERVER_PATH} ${ADN_MONITOR_PATH}"
 )
 
-_SYSTEMD_PLUGINS = ("adn-server", "adn-echo", "adn-monitor", "daprs")
+_SYSTEMD_PLUGINS = ("adn-server", "adn-echo", "adn-odtp", "adn-monitor", "daprs")
 
 
 def _host_path(settings: Settings, path: str | Path) -> Path:
@@ -154,6 +154,7 @@ def _docker_service_action(settings: Settings, action: str, unit: str) -> int:
     mapping = {
         "adn-server": "adn-server",
         "adn-echo": "adn-echo",
+        "adn-odtp": "adn-odtp",
         "adn-monitor": "adn-monitor",
         "daprs": "daprs",
     }
@@ -225,11 +226,19 @@ def disable_legacy_hotspot_proxy(settings: Settings | None = None) -> None:
             systemctl(cfg, "disable", "--now", unit)
 
 
+def _odtp_available(settings: Settings) -> bool:
+    from adn_deploy.application.config import odtp_available
+
+    return odtp_available(settings)
+
+
 def deploy_systemd_plugins(settings: Settings | None = None) -> None:
     cfg = settings or init_env()
     plugins_dir = cfg.paths.plugins
     for pid in _SYSTEMD_PLUGINS:
         if not is_plugin_enabled(plugins_dir, cfg.adn_root, pid):
+            continue
+        if pid == "adn-odtp" and not _odtp_available(cfg):
             continue
         unit = plugin_get(plugins_dir, pid, "systemd.unit")
         tpl = plugin_get(plugins_dir, pid, "systemd.template")

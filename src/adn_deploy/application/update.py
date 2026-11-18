@@ -43,7 +43,7 @@ def _update_one(settings: Settings, plugin_id: str) -> bool:
         print("  os-base: apt update (optional)")
     elif plugin_id == "pyenv":
         os_bootstrap.bootstrap_pyenv(settings)
-    elif plugin_id in ("adn-server", "adn-echo"):
+    elif plugin_id in ("adn-server", "adn-echo", "adn-odtp"):
         if not git_repos.git_pull_peer(settings):
             return False
         os_bootstrap.pip_peer(settings)
@@ -71,7 +71,7 @@ def run(settings: Settings | None = None) -> bool:
     order = topo_order(cfg.paths.plugins, cfg.profile)
     peer_done = False
     for pid in order:
-        if pid in ("adn-server", "adn-echo"):
+        if pid in ("adn-server", "adn-echo", "adn-odtp"):
             if peer_done:  # same clone: update once
                 continue
             peer_done = True
@@ -80,6 +80,7 @@ def run(settings: Settings | None = None) -> bool:
             return False
     app_config.init_peer(cfg)
     app_config.init_echo(cfg)
+    app_config.init_odtp(cfg)
     app_config.init_daprs(cfg)
     systemd.deploy_all(cfg)
     incomplete = app_config.mandatory_fields_incomplete(cfg)

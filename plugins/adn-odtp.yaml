@@ -1,0 +1,16 @@
+id: adn-odtp
+name: ADN ODTP gateway (phone apps / IP terminals)
+group: core
+enabled_by_default: true
+depends_on:
+  - adn-server
+profiles:
+  - minimal
+  - full
+systemd:
+  template: adn-odtp.service.in
+  unit: adn-odtp.service
+config:
+  - template: adn-odtp.example.yaml
+    dest: ${ADN_ROOT}/adn-dmr-server/adn-odtp.yaml
+    merge: keep_existing

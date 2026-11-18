@@ -133,6 +133,7 @@ See [install-docker/README.md](install-docker/README.md) for host layout and tro
 | Component | Role |
 |-----------|------|
 | **adn-server** | DMR peer + integrated hotspot proxy |
+| **adn-odtp** | ODTP gateway (server ≥ 2.7): phone apps and IP terminals log in as peers. UDP `54006` (`ODTP.LISTEN_PORT` in `adn-odtp.yaml`); open it in the firewall |
 | **adn-monitor** | FastAPI: REST `/api/*`, WebSocket `/ws` |
 | **nginx** | TLS + static SPA |
 | **MariaDB** | Self-service login DB |
