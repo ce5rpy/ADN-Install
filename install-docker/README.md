@@ -77,7 +77,9 @@ sudo DOCKER_REGISTRY=127.0.0.1:5000/ce5rpy \
 
 ## Services
 
-MariaDB, adn-server, adn-echo, adn-monitor (:8080), Traefik (:80), daprs (profile `full`).
+MariaDB, adn-server, adn-echo, adn-odtp (ODTP gateway for phone apps, UDP 54006), adn-monitor (:8080), Traefik (:80), daprs (profile `full`).
+
+ODTP: the apps connect to UDP `ADN_ODTP_PORT` (default `54006`, in `/opt/adn-docker/.env`); open it in the firewall. Settings live in `state/peer/adn-odtp.yaml`.
 
 ## Troubleshooting
 

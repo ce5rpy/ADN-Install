@@ -1,0 +1,21 @@
+[Unit]
+Description=ADN ODTP gateway (phone apps and IP terminals)
+After=network-online.target adn-server.service
+Wants=network-online.target
+Requires=adn-server.service
+
+[Service]
+User=${ADN_USER}
+Type=simple
+Restart=always
+RestartSec=3
+SyslogIdentifier=adn-odtp
+WorkingDirectory=${ADN_DMR_SERVER_PATH}
+ExecStart=${ADN_PYENV_PYTHON} ${ADN_DMR_SERVER_PATH}/adn-server.py --odtp -c ${ADN_DMR_SERVER_PATH}/adn-odtp.yaml
+# SIGUSR2 reopens log files (SIGHUP is ignored by the ODTP gateway)
+ExecReload=/bin/kill -USR2 $MAINPID
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

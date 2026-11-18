@@ -259,6 +259,8 @@ def docker_doctor(settings: Settings) -> bool:
         expected = {"mariadb", "adn-server", "adn-echo", "adn-monitor", "traefik"}
         if app_config.daprs_plugin_enabled(settings):
             expected.add("daprs")
+        if app_config.odtp_available(settings):
+            expected.add("adn-odtp")
         for svc in sorted(expected):
             if svc in running:
                 print(f"OK:   compose service {svc} running")
@@ -349,6 +351,8 @@ def run(settings: Settings | None = None) -> bool:
 
     plugins = cfg.paths.plugins
     units = ["adn-server", "adn-monitor", "adn-echo"]
+    if app_config.odtp_available(cfg):
+        units.append("adn-odtp")
     if app_config.daprs_plugin_enabled(cfg):
         units.append("daprs")
     for u in units:

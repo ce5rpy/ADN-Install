@@ -21,7 +21,7 @@ MYSQL_DB_NAME="${MYSQL_DB_NAME:-hbmon}"
 MYSQL_DB_USER="${MYSQL_DB_USER:-self_service_user}"
 MYSQL_DB_PASSWORD="${MYSQL_DB_PASSWORD:-}"
 
-UNITS=(adn-server adn-echo adn-monitor daprs)
+UNITS=(adn-server adn-echo adn-odtp adn-monitor daprs)
 SYSTEMCTL_STOP_TIMEOUT="${SYSTEMCTL_STOP_TIMEOUT:-30}"
 
 die() { echo "clean-all: $*" >&2; exit 1; }

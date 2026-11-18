@@ -133,6 +133,7 @@ Ver [install-docker/README.es.md](install-docker/README.es.md) para la estructur
 | Componente | Función |
 |------------|---------|
 | **adn-server** | DMR peer + proxy de hotspots integrado |
+| **adn-odtp** | Pasarela ODTP (servidor ≥ 2.7): las apps de móvil y terminales IP entran como peers. UDP `54006` (`ODTP.LISTEN_PORT` en `adn-odtp.yaml`); ábrelo en el cortafuegos |
 | **adn-monitor** | FastAPI: REST `/api/*`, WebSocket `/ws` |
 | **nginx** | TLS + SPA estática |
 | **MariaDB** | Base de datos de login self-service |

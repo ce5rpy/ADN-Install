@@ -16,7 +16,7 @@ from adn_deploy.domain.plugins import is_plugin_enabled, plugin_peer_stack_enabl
 
 # Local config/state kept inside app trees (untracked). Backed up before a git
 # ref switch and always restored afterwards, even if upstream starts tracking them.
-PEER_PRESERVE = ("adn-server.yaml", "adn-echo.yaml", "adn-parrot.yaml")
+PEER_PRESERVE = ("adn-server.yaml", "adn-echo.yaml", "adn-parrot.yaml", "adn-odtp.yaml")
 MONITOR_PRESERVE = (".env", "backend/.env", "monitor/adn-monitor.yaml")
 DAPRS_PRESERVE = (
     "gps_data.cfg",

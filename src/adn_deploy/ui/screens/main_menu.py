@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from adn_deploy.application import update as app_update
+from adn_deploy.application.config import odtp_available
 from adn_deploy.application.config_schema import SERVICE_LABELS
 from adn_deploy.core.env import Settings
 from adn_deploy.ui.run_capture import capture_output
@@ -23,6 +24,8 @@ class MainMenuScreen(MenuScreen):
             MenuEntry("adn-monitor", SERVICE_LABELS["adn-monitor"]),
             MenuEntry("adn-echo", SERVICE_LABELS["adn-echo"]),
         ]
+        if odtp_available(settings):
+            entries.append(MenuEntry("adn-odtp", SERVICE_LABELS["adn-odtp"]))
         if is_plugin_enabled(settings.paths.plugins, settings.adn_root, "daprs"):
             entries.append(MenuEntry("daprs", SERVICE_LABELS["daprs"]))
         if settings.docker:

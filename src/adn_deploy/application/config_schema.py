@@ -16,6 +16,7 @@ SERVICE_LABELS: dict[str, str] = {
     "adn-server": "Server (DMR peer)",
     "adn-monitor": "Monitor / web panel",
     "adn-echo": "Echo (PEER playback)",
+    "adn-odtp": "ODTP gateway (phone apps)",
     "daprs": "D-APRS (GPS/APRS gateway)",
 }
 
@@ -32,6 +33,14 @@ COMMON_VARS: dict[str, list[VarMeta]] = {
         VarMeta("SYSTEMS.ECHO.MASTER_IP", "Echo master IP (adn-server)", "127.0.0.1"),
         VarMeta("SYSTEMS.ECHO.MASTER_PORT", "Echo master port", "54917"),
         VarMeta("ALIASES.PEER_URL", "Peer list URL", "https://servers.adn.systems/peer_ids.json"),
+    ],
+    "adn-odtp": [
+        VarMeta("ODTP.LISTEN_PORT", "UDP port the apps connect to", "54006"),
+        VarMeta("ODTP.MASTER_IP", "MASTER the terminals log in to", "127.0.0.1"),
+        VarMeta("ODTP.MASTER_PORT", "MASTER port (hotspot proxy for self-care passwords)", "62031"),
+        VarMeta("ODTP.PEER_SUFFIX", "Peer ID suffix (0-99)", "98"),
+        VarMeta("ODTP.SMS_FORMAT", "Texts to radios: standard, tms or hytera", "standard"),
+        VarMeta("ODTP.LOCATION_DST", "Private ID for app GPS (0 = off)", "0"),
     ],
     "adn-monitor": [
         VarMeta("ADN_CONNECTION.ADN_IP", "Peer server IP", "127.0.0.1"),
@@ -74,6 +83,6 @@ COMMON_VARS: dict[str, list[VarMeta]] = {
 
 
 def service_unit(service_id: str) -> str:
-    if service_id in ("adn-server", "adn-monitor", "adn-echo", "daprs"):
+    if service_id in ("adn-server", "adn-monitor", "adn-echo", "adn-odtp", "daprs"):
         return service_id
     raise ValueError(f"unknown service: {service_id}")

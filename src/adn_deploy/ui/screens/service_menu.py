@@ -78,7 +78,7 @@ class ServiceMenuScreen(MenuScreen):
             def _pip() -> bool:
                 if self.settings.docker:
                     return True
-                if self.service_id in ("adn-server", "adn-echo"):
+                if self.service_id in ("adn-server", "adn-echo", "adn-odtp"):
                     return os_bootstrap.pip_peer(self.settings)
                 if self.service_id == "adn-monitor":
                     return os_bootstrap.pip_monitor(self.settings)

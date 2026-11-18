@@ -69,6 +69,27 @@ services:
         condition: service_started
     networks: [adn]
 
+  # ODTP gateway (adn-server >= 2.7): phone apps / IP terminals -> MASTER on adn-server.
+  adn-odtp:
+    container_name: adn-odtp
+    image: ${ADN_IMAGE_SERVER:-adn-server:local}
+    pull_policy: always
+    restart: unless-stopped
+    command: ["odtp"]
+    ports:
+      - "${ADN_ODTP_PORT:-54006}:54006/udp"
+    volumes:
+      - ${ADN_DOCKER_STATE:-./state}:/docker-state:ro
+      - ${ADN_DOCKER_STATE:-./state}/logs:/docker-state/logs:rw
+    environment:
+      ADN_DOCKER_STATE: /docker-state
+      ADN_SERVER_HOST: adn-server
+      ADN_LOG_LEVEL: ${ADN_LOG_LEVEL:-}
+    depends_on:
+      adn-server:
+        condition: service_started
+    networks: [adn]
+
   adn-monitor:
     container_name: adn-monitor
     image: ${ADN_IMAGE_MONITOR:-adn-monitor:local}

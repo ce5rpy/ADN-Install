@@ -191,6 +191,7 @@ adn_docker_extract_config_examples() {
   local -a srv_pairs=(
     "/opt/adn-dmr-server/adn-server.example.yaml:adn-server.example.yaml"
     "/opt/adn-dmr-server/adn-echo.example.yaml:adn-echo.example.yaml"
+    "/opt/adn-dmr-server/adn-odtp.example.yaml:adn-odtp.example.yaml"
     "/opt/adn-dmr-server/adn-parrot.example.yaml:adn-parrot.example.yaml"
   )
   local -a mon_pairs=(
@@ -249,10 +250,12 @@ adn_docker_precompose_setup() {
 }
 
 adn_docker_restart_apps() {
-  local -a svcs=(adn-server adn-echo adn-monitor)
-  if adn_docker_compose ps --services 2>/dev/null | grep -Fxq daprs; then
-    svcs+=(daprs)
-  fi
+  local -a svcs=(adn-server adn-echo adn-monitor) opt
+  for opt in daprs adn-odtp; do
+    if adn_docker_compose ps --services 2>/dev/null | grep -Fxq "$opt"; then
+      svcs+=("$opt")
+    fi
+  done
   adn_docker_compose restart "${svcs[@]}"
   adn_docker_wait_monitor_healthy
 }
@@ -306,11 +309,16 @@ adn_docker_update() {
   adn_docker_compose pull || return 1
   adn_docker_traefik_render || true
   adn_docker_compose up -d --remove-orphans "$@" || return 1
-  # D-APRS resolves adn-server once at startup; a recreated server gets a new IP.
-  if [[ "$(adn_docker_compose ps -q adn-server 2>/dev/null)" != "$srv_id_before" ]] \
-      && adn_docker_compose ps --services 2>/dev/null | grep -Fxq daprs; then
-    echo "  adn-server was recreated — restarting daprs so it reconnects"
-    adn_docker_compose restart daprs || true
+  # D-APRS and the ODTP gateway resolve adn-server once at startup; a recreated
+  # server gets a new IP, so restart them to reconnect.
+  if [[ "$(adn_docker_compose ps -q adn-server 2>/dev/null)" != "$srv_id_before" ]]; then
+    local dep
+    for dep in daprs adn-odtp; do
+      if adn_docker_compose ps --services 2>/dev/null | grep -Fxq "$dep"; then
+        echo "  adn-server was recreated — restarting $dep so it reconnects"
+        adn_docker_compose restart "$dep" || true
+      fi
+    done
   fi
   adn_docker_wait_monitor_healthy || true
   docker image prune -f >/dev/null 2>&1 || true  # superseded (dangling) layers only

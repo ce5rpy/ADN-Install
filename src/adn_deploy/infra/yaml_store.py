@@ -102,9 +102,32 @@ def coerce_scalar_value(key: str, value: Any) -> Any:
         "SERVER_ID",
         "REPORT_PORT",
         "LISTEN_PORT",
+        # ODTP gateway (adn-odtp.yaml): the section is type-checked at start-up
+        "PEER_SUFFIX",
+        "MAX_SESSIONS",
+        "MAX_SESSIONS_PER_IP",
+        "MAX_LOGINS_PER_MINUTE",
+        "SMS_PREAMBLES",
+        "LOCATION_DST",
     ):
         if low.isdigit():
             return int(low)
+    return value
+
+
+def _keep_existing_type(current: Any, value: Any) -> Any:
+    """A CLI string for a key that already holds an int/bool stays an int/bool."""
+    if not isinstance(value, str) or isinstance(current, str) or current is None:
+        return value
+    low = value.strip().lower()
+    if isinstance(current, bool):
+        if low in ("true", "yes", "1", "on"):
+            return True
+        if low in ("false", "no", "0", "off"):
+            return False
+        return value
+    if isinstance(current, int) and low.lstrip("-").isdigit():
+        return int(low)
     return value
 
 
@@ -198,7 +221,11 @@ def yaml_get(config: Path, key: str) -> Any:
 
 def yaml_set(config: Path, key: str, value: Any) -> None:
     data = load_yaml(config)
-    set_path(data, key, coerce_scalar_value(key, value))
+    try:
+        current = get_path(data, key)
+    except (KeyError, TypeError):
+        current = None
+    set_path(data, key, _keep_existing_type(current, coerce_scalar_value(key, value)))
     save_yaml(config, data)
 
 

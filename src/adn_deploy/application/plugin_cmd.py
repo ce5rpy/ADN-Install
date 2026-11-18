@@ -17,7 +17,7 @@ def _install_one(settings: Settings, plugin_id: str) -> bool:
         return os_bootstrap.bootstrap_install(settings)
     if plugin_id == "pyenv":
         return os_bootstrap.bootstrap_pyenv(settings)
-    if plugin_id in ("adn-server", "adn-echo", "adn-monitor", "adn-web"):
+    if plugin_id in ("adn-server", "adn-echo", "adn-odtp", "adn-monitor", "adn-web"):
         print(f"  {plugin_id}: deferred (Apps / Config phases)")
         return True
     if plugin_id == "ufw":
