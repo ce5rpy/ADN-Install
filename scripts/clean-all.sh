@@ -323,7 +323,7 @@ main() {
   remove_pyenv
   remove_trees
   echo "clean-all: done. Run a fresh install:"
-  echo "  curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/develop/install.sh | sudo env ADN_DEPLOY_REF=develop bash"
+  echo "  curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.sh | sudo bash"
 }
 
 main "$@"

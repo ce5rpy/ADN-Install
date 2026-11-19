@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
 import sys
 
 from adn_deploy.application import config as app_config
@@ -63,11 +65,36 @@ def _update_one(settings: Settings, plugin_id: str) -> bool:
     return True
 
 
-def run(settings: Settings | None = None) -> bool:
+# Set when the update re-runs itself after the toolkit changed (skip the toolkit step).
+_REEXEC_ENV = "ADN_UPDATE_REEXEC"
+
+
+def _continue_with_new_toolkit(cfg: Settings, *, replace_process: bool) -> bool:
+    """The toolkit changed on disk, but this process still runs the old modules:
+    run the rest of the update with the new code (new plugins such as adn-odtp)."""
+    wrapper = str(cfg.adn_deploy_home / "sbin" / "adn-deploy")
+    env = {**os.environ, _REEXEC_ENV: "1"}
+    print("  deploy: toolkit changed — continuing the update with the new code")
+    sys.stdout.flush()
+    sys.stderr.flush()
+    if replace_process:
+        os.execve(wrapper, [wrapper, *sys.argv[1:]], env)
+    proc = subprocess.run([wrapper, "update"], env=env, capture_output=True, text=True, check=False)
+    print(proc.stdout, end="")
+    print(proc.stderr, end="", file=sys.stderr)
+    return proc.returncode == 0
+
+
+def run(settings: Settings | None = None, *, reexec: bool = False) -> bool:
+    """reexec=True (CLI): replace this process after a toolkit change; else run a child."""
     cfg = settings or init_env()
     require_root_or_exit(cfg)
-    if not update_deploy_toolkit(cfg):
-        return False
+    if os.environ.get(_REEXEC_ENV) != "1":
+        before = git_repos.deploy_head(cfg)
+        if not update_deploy_toolkit(cfg):
+            return False
+        if git_repos.deploy_head(cfg) != before:
+            return _continue_with_new_toolkit(cfg, replace_process=reexec)
     order = topo_order(cfg.paths.plugins, cfg.profile)
     peer_done = False
     for pid in order:

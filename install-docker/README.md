@@ -62,7 +62,7 @@ Images come from `docker.io/ce5rpy/*` and use the `latest` tag, which always poi
 | `daprs` | `latest` | `DOCKER_TAG_DAPRS` |
 | `adn-deploy-cli` | `latest` | `DOCKER_TAG_DEPLOY_CLI` |
 
-To update to the newest images: `sudo adn-docker update` (pulls `latest`, recreates the containers that changed and shows the running versions).
+To update to the newest images: `sudo adn-docker update`. It refreshes `docker-compose.yml` and `adn-docker` from ADN-Install `master` (so new services are added; the previous compose is kept as `docker-compose.yml.bak`), pulls `latest`, recreates the containers that changed and shows the running versions. `ADN_DOCKER_ASSETS_REF` pins another ADN-Install ref (branch or tag).
 
 To pin a version at install time, for example: `sudo DOCKER_TAG_SERVER=2.5.5 bash docker-install.sh`. `DOCKER_REGISTRY` selects another registry namespace.
 

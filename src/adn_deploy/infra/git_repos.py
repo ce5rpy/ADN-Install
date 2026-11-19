@@ -500,6 +500,18 @@ def assert_install_trees(settings: Settings | None = None) -> bool:
     return err == 0
 
 
+def deploy_head(settings: Settings) -> str:
+    """Toolkit checkout commit ("" when it is not a git repo)."""
+    dest = settings.adn_deploy_home
+    if not (dest / ".git").is_dir():
+        return ""
+    try:
+        owner = pwd.getpwuid(dest.stat().st_uid).pw_name
+    except KeyError:
+        owner = None
+    return _git(settings, dest, "rev-parse", "HEAD", user=owner).stdout.strip()
+
+
 def git_pull_deploy(settings: Settings | None = None) -> bool:
     """Update the toolkit checkout to origin/<branch> (GIT_BRANCH_DEPLOY, else the
     current branch, else the remote default branch — e.g. detached HEAD after

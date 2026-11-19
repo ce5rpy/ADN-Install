@@ -2,164 +2,103 @@
 
 **English** · [Español](README.es.md)
 
-Public installers for the **ce5rpy** ADN stack (DMR peer server + unified Python monitor).
+Installs an ADN DMR server: the DMR server, the web dashboard and the gateway for phone apps.
 
-**Branches:** `develop` (daily work) · `master` (release). Install curl URLs use `master`.
+Everything you need is below. For version pins, variables and other details, see the [advanced guide](README.advanced.md).
 
-## Bare metal install
+## What you need
 
-On a fresh Debian 13 or Ubuntu 22.04+ VM as **root**:
+- A server or VM with **Debian 13** or **Ubuntu 22.04 or newer**, freshly installed.
+- Access as **root** (or a user with `sudo`).
+- Your **Server ID** and the **name** you want on the dashboard.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.sh | sudo bash
-```
+## Install
 
-The installer runs as root and, by default, creates a Linux account **`adn`** (pyenv, git clones, service ownership). If `adn` already exists, nothing is changed and no password is needed.
+Choose **one** of the two options. If you are not sure, choose **Docker**.
 
-**Fresh VM — set login password for new `adn` user** (non-interactive / CI only):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.sh \
-  | sudo ADN_USER_PASSWORD='your_password' bash
-```
-
-Interactive install (normal terminal): if `adn` is missing and `ADN_USER_PASSWORD` is unset, phase `[1/6]` prompts for a password on `/dev/tty`.
-
-Or from a local clone:
-
-```bash
-cd /opt/ADN-Install
-sudo bash install.sh
-```
-
-Pin toolkit branch (`ADN-Install` at `/opt/ADN-Install`):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.sh \
-  | sudo ADN_DEPLOY_REF=master bash
-```
-
-`ADN_INSTALL_REF` overrides `ADN_DEPLOY_REF` when both are set.
-
-### Bare metal install (`develop` branch)
-
-Bare metal uses **two independent branch pins**:
-
-| What gets cloned | Path | Branch variable | Default |
-|------------------|------|-----------------|---------|
-| Installer toolkit | `/opt/ADN-Install` | `ADN_DEPLOY_REF` or `ADN_INSTALL_REF` | `master` |
-| DMR peer server | `/opt/adn-dmr-server` | `GIT_BRANCH_PEER` in `deploy.conf` (branch, tag or commit) | remote default (`master`) |
-| Monitor | `/opt/adn-monitor` | `GIT_BRANCH_MONITOR` in `deploy.conf` (branch, tag or commit) | remote default (`master`) |
-
-`ADN_DEPLOY_REF=develop` only pins the **toolkit**. The app repos still clone `master` unless you set `GIT_BRANCH_PEER` / `GIT_BRANCH_MONITOR` in `deploy.conf`.
-
-**Recommended — full install on `develop` (3 steps):**
-
-```bash
-# 1) Bootstrap toolkit from develop (stops before stack clone)
-curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/develop/install.sh \
-  | sudo env ADN_DEPLOY_REF=develop ADN_DEPLOY_BOOTSTRAP_ONLY=1 bash
-
-# 2) Pin app repos to develop
-sudo tee -a /opt/ADN-Install/deploy.conf <<'EOF'
-GIT_BRANCH_PEER="develop"
-GIT_BRANCH_MONITOR="develop"
-EOF
-
-# 3) Complete install (OS, pyenv, stack, wizard, services)
-sudo bash /opt/ADN-Install/install/install.sh
-```
-
-**Local clone on `develop`:**
-
-```bash
-cd /opt/ADN-Install   # git checkout develop
-sudo tee -a deploy.conf <<'EOF'
-GIT_BRANCH_PEER="develop"
-GIT_BRANCH_MONITOR="develop"
-EOF
-sudo ADN_DEPLOY_REF=develop bash install.sh
-```
-
-**Already installed — update or switch versions:**
-
-`adn-deploy update` (or re-running the installer) updates the app repos in place to the ref in `deploy.conf`: a branch, a release tag, or a commit. Without `GIT_BRANCH_*` they follow `master`.
-
-```bash
-sudo tee -a /opt/ADN-Install/deploy.conf <<'EOF'
-GIT_BRANCH_PEER="v2.5.6"
-GIT_BRANCH_MONITOR="v2.5.3"
-EOF
-sudo adn-deploy update    # fetch + checkout, pip, restart services
-```
-
-- Local config is kept: `adn-server.yaml`, `adn-echo.yaml`, `adn-monitor.yaml`, `.env` and the D-APRS config/data files are backed up to `/opt/adn-backups/<repo>-<date>/` (root only) before each switch and restored afterwards. `SERVER_ID` and security settings are never reset by an update.
-- If tracked files in an app repo were edited by hand, the update stops for that repo — commit or stash those changes first.
-
-| Variable | Default | When needed |
-|----------|---------|-------------|
-| `ADN_DEPLOY_REF` | `master` | Pin `ADN-Install` toolkit branch (`develop`, tag, SHA) |
-| `ADN_INSTALL_REF` | *(falls back to `ADN_DEPLOY_REF`)* | Same as above; wins if both set |
-| `GIT_BRANCH_PEER` | *(unset → remote default)* | Set in `deploy.conf` to install/update `adn-dmr-server` at a branch, tag (`v2.5.6`) or commit |
-| `GIT_BRANCH_MONITOR` | *(unset → remote default)* | Set in `deploy.conf` to install/update `adn-monitor` at a branch, tag (`v2.5.3`) or commit |
-| `ADN_DEPLOY_BOOTSTRAP_ONLY` | `0` | `1` = clone toolkit only, then edit `deploy.conf` before re-running install |
-| `ADN_USER` | `adn` | Override Linux username |
-| `ADN_USER_PASSWORD` | *(unset)* | Only when **creating** `adn` without a TTY prompt |
-| `ADN_CREATE_USER=0` | create user | Use existing user; must already exist |
-| `ADN_DEPLOY_STAGING=1` | off | Staging install under another `ADN_ROOT` (no system-wide apt/systemd/nginx) |
-
-After install: `adn-deploy menu`, `adn-deploy doctor`, `adn-deploy service start`.
-
-## Docker install (production)
-
-Does **not** clone this repo on the host. Creates `/opt/adn-docker` and `/usr/local/sbin/adn-docker`. Images from `docker.io/ce5rpy/*`, each at the latest release of its component.
+**Option A — Docker (recommended):**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/docker-install.sh | sudo bash
 ```
 
-After install:
+**Option B — Bare metal (without Docker):**
 
 ```bash
-adn-docker setup    # if wizard was skipped
-adn-docker doctor
-adn-docker menu     # ssl enable when ready
+curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.sh | sudo bash
 ```
 
-See [install-docker/README.md](install-docker/README.md) for host layout and troubleshooting.
+The installer asks for your Server ID and dashboard name at the end. If it did not ask (for example, it was run without a terminal), run:
 
-## Architecture (bare metal)
+```bash
+sudo adn-docker setup     # Docker
+sudo adn-deploy wizard    # Bare metal
+```
 
-| Component | Role |
-|-----------|------|
-| **adn-server** | DMR peer + integrated hotspot proxy |
-| **adn-odtp** | ODTP gateway (server ≥ 2.7): phone apps and IP terminals log in as peers. UDP `54006` (`ODTP.LISTEN_PORT` in `adn-odtp.yaml`); open it in the firewall |
-| **adn-monitor** | FastAPI: REST `/api/*`, WebSocket `/ws` |
-| **nginx** | TLS + static SPA |
-| **MariaDB** | Self-service login DB |
+## Check that it works
 
-## Commands
+```bash
+sudo adn-docker doctor    # Docker
+sudo adn-deploy doctor    # Bare metal
+```
 
-| Command | Description |
-|---------|-------------|
-| `adn-deploy install` | Full install |
-| `adn-deploy update` | Update toolkit and app repos to the configured refs, keep config, restart |
-| `adn-deploy menu` | Textual admin menu |
-| `adn-deploy doctor` | Health checks |
-| `adn-deploy stack` | git, config, systemd, web |
+It should end with `Doctor: OK`. Then open `http://<your-server-ip>/` in a browser to see the dashboard.
 
-## Layout
+## Open these ports
 
-- `install.sh` — bare metal bootstrap (`curl | bash`)
-- `docker-install.sh` — Docker production install (`curl | bash`)
-- `sbin/adn-deploy` — CLI wrapper (pyenv Python)
-- `src/adn_deploy/` — Python toolkit
-- `install-docker/` — Docker runtime install scripts only (no build)
+If your server or your cloud provider has a firewall, open:
 
-## Repos cloned under `$ADN_ROOT`
+| Port | For |
+|------|-----|
+| `80/tcp`, `443/tcp` | Web dashboard |
+| `62031/udp` | Hotspots |
+| `62032/udp` | OpenBridge links to other servers |
+| `54006/udp` | Phone apps and IP terminals (ODTP) |
 
-| Path | GitHub | Branch (`deploy.conf`) |
-|------|--------|------------------------|
-| `adn-dmr-server/` | Amateur-Digital-Network/ADN-DMR-Peer-Server | `GIT_BRANCH_PEER` |
-| `adn-monitor/` | Amateur-Digital-Network/ADN-Monitor | `GIT_BRANCH_MONITOR` |
-| `ADN-Install/` | ce5rpy/ADN-Install (toolkit at `/opt/ADN-Install`) | `ADN_DEPLOY_REF` at install time |
+## Update
+
+**Docker:**
+
+```bash
+sudo adn-docker update
+```
+
+**Bare metal:**
+
+```bash
+sudo adn-deploy update
+```
+
+Your settings are kept.
+
+### Updating from 2.6 to 2.7
+
+Version 2.7 adds the gateway for phone apps (ODTP). Updating from 2.6 needs these steps **once**:
+
+**Docker** — run the installer again (your settings and passwords are kept):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/docker-install.sh | sudo bash
+```
+
+**Bare metal** — run these two commands, in this order:
+
+```bash
+sudo adn-deploy update --toolkit
+sudo adn-deploy update
+```
+
+Then open `54006/udp` in your firewall.
+
+## Admin menu
+
+```bash
+sudo adn-docker menu      # Docker
+sudo adn-deploy menu      # Bare metal
+```
+
+## Something is wrong?
+
+1. Run `doctor` (see above) and read the lines that say `WARN` or `ERROR`.
+2. Check that the ports are open.
+3. See the [advanced guide](README.advanced.md) and, for Docker, [install-docker/README.md](install-docker/README.md).

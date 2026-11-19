@@ -300,7 +300,54 @@ adn_docker_running_version() {
 }
 
 # Pull the tags in .env (latest unless pinned), recreate what changed, show versions.
+# Host assets written by docker-install.sh (compose, Traefik templates, this CLI)
+# come from ADN-Install; refresh them on update so new services (e.g. adn-odtp in
+# 2.7) reach existing installs. Returns 10 when this CLI itself changed.
+# ADN_DOCKER_ASSETS_REF pins the ADN-Install ref (default master).
+adn_docker_refresh_assets() {
+  local root raw tmp rel dest mode self cli_changed=0
+  root="$(adn_docker_root)"
+  raw="${ADN_DOCKER_ASSETS_RAW:-https://raw.githubusercontent.com/ce5rpy/ADN-Install/${ADN_DOCKER_ASSETS_REF:-master}}"
+  self="$(readlink -f "${BASH_SOURCE[0]}")"
+  tmp="$(mktemp -d)"
+  local -a assets=(
+    "install-docker/compose/compose.registry.yml|${ADN_DOCKER_COMPOSE_FILE:-$root/docker-compose.yml}|644"
+  )
+  for rel in traefik.http.yml.in traefik.https.yml.in ssl.override.yml.in; do
+    [[ -d "$root/state/traefik/templates" ]] \
+      && assets+=("install-docker/compose/traefik/$rel|$root/state/traefik/templates/$rel|644")
+  done
+  [[ "$self" == /usr/local/sbin/adn-docker ]] \
+    && assets+=("install-docker/bin/adn-docker-standalone|$self|755")
+  echo "adn-docker: refreshing host files from ${raw} ..."
+  local entry
+  for entry in "${assets[@]}"; do
+    IFS='|' read -r rel dest mode <<<"$entry"
+    if ! curl -fsSL --retry 2 -H 'Cache-Control: no-cache' "$raw/$rel" -o "$tmp/asset"; then
+      echo "  WARN: could not download $rel — keeping $dest" >&2
+      continue
+    fi
+    cmp -s "$tmp/asset" "$dest" && continue
+    [[ -f "$dest" && "$dest" != "$self" ]] && cp -p "$dest" "$dest.bak"
+    # New file + rename: a running shell keeps reading the old copy of this CLI.
+    install -m "$mode" "$tmp/asset" "$dest.new" && mv -f "$dest.new" "$dest"
+    echo "  updated: $dest"
+    [[ "$dest" == "$self" ]] && cli_changed=1
+  done
+  rm -rf "$tmp"
+  [[ "$cli_changed" -eq 1 ]] && return 10
+  return 0
+}
+
 adn_docker_update() {
+  if [[ "${ADN_DOCKER_UPDATE_REFRESHED:-0}" != "1" ]]; then
+    local rc=0
+    adn_docker_refresh_assets || rc=$?
+    if [[ "$rc" -eq 10 ]]; then
+      echo "  adn-docker changed — continuing the update with the new version"
+      ADN_DOCKER_UPDATE_REFRESHED=1 exec /usr/local/sbin/adn-docker update "$@"
+    fi
+  fi
   local before_srv before_mon after_srv after_mon srv_id_before
   srv_id_before="$(adn_docker_compose ps -q adn-server 2>/dev/null)"
   before_srv="$(adn_docker_running_version adn-server /opt/adn-dmr-server/pyproject.toml)"

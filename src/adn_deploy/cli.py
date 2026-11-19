@@ -174,7 +174,7 @@ def update_cmd(
 ) -> None:
     """git pull toolkit and apps, pip, redeploy units."""
     cfg = _settings()
-    ok = app_update.update_deploy_toolkit(cfg) if toolkit_only else app_update.run(cfg)
+    ok = app_update.update_deploy_toolkit(cfg) if toolkit_only else app_update.run(cfg, reexec=True)
     raise typer.Exit(0 if ok else 1)
 
 
