@@ -354,6 +354,9 @@ adn_docker_update() {
   before_mon="$(adn_docker_running_version adn-monitor /opt/adn-monitor/pyproject.toml)"
   echo "adn-docker: pulling images (tags from .env; latest unless pinned) ..."
   adn_docker_compose pull || return 1
+  # The CLI image runs via docker run, not compose, so compose pull skips it.
+  docker pull -q "$(adn_docker_cli_image)" >/dev/null \
+    || echo "  WARN: could not pull $(adn_docker_cli_image)" >&2
   adn_docker_traefik_render || true
   adn_docker_compose up -d --remove-orphans "$@" || return 1
   # D-APRS and the ODTP gateway resolve adn-server once at startup; a recreated
