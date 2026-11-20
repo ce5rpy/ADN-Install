@@ -207,6 +207,46 @@ def init_odtp(settings: Settings | None = None) -> None:
     created = copy_if_missing(cfg, example, dest)
     if dest.is_file():
         apply_deploy_overrides(cfg, dest, initial=created)
+    sync_panel_odtp_port(cfg)
+
+
+def odtp_public_port(settings: Settings) -> int | None:
+    """Port the phone apps reach the ODTP gateway on, or None when it does not run.
+
+    Docker publishes ${ADN_ODTP_PORT:-54006}; bare metal listens on ODTP.LISTEN_PORT.
+    """
+    peer = settings.adn_dmr_server_path
+    if peer is None:
+        return None
+    odtp_yaml = peer / "adn-odtp.yaml"
+    if settings.docker:
+        if not odtp_yaml.is_file():
+            return None
+        env_path = _docker_compose_env_path(settings)
+        raw = get_deploy_kv(env_path, "ADN_ODTP_PORT") if env_path else ""
+        raw = raw or os.environ.get("ADN_ODTP_PORT", "")
+    else:
+        if not odtp_available(settings) or not odtp_yaml.is_file():
+            return None
+        raw = str(yaml_store.yaml_get(odtp_yaml, "ODTP.LISTEN_PORT") or "")
+    raw = raw.strip()
+    return int(raw) if raw.isdigit() and 0 < int(raw) < 65536 else 54006
+
+
+def sync_panel_odtp_port(settings: Settings, *, replace: bool = False) -> None:
+    """ADN_PANEL in adn-server.yaml: report the ODTP gateway's public port to the panel.
+
+    Only when the sysop has added ADN_PANEL; an existing ODTP_PORT is kept unless replace.
+    """
+    peer = settings.adn_dmr_server_path / "adn-server.yaml"
+    if not peer.is_file() or not isinstance(yaml_store.yaml_get(peer, "ADN_PANEL"), dict):
+        return
+    if not replace and yaml_store.yaml_get(peer, "ADN_PANEL.ODTP_PORT"):
+        return
+    port = odtp_public_port(settings)
+    if port is None:
+        return
+    yaml_set_path(settings, peer, "ADN_PANEL.ODTP_PORT", str(port))
 
 
 def init_monitor(settings: Settings | None = None) -> None:
@@ -988,6 +1028,10 @@ def set_cmd(settings: Settings | None, svc: str, key: str, value: str) -> int:
     yaml_set_path(cfg, path, key, value)
     if svc in ("adn-server", "server") and key == "GLOBAL.SERVER_ID":
         normalize_server_id(cfg, path)
+    if svc in ("adn-server", "server") and key.startswith("ADN_PANEL."):
+        sync_panel_odtp_port(cfg)
+    if svc == "adn-odtp" and key == "ODTP.LISTEN_PORT" and not cfg.docker:
+        sync_panel_odtp_port(cfg, replace=True)
     # deploy.conf is the source of truth for these under Docker (sync copies it back
     # into the YAMLs); keep it in step so the change is not reverted.
     mirror = _DEPLOY_CONF_MIRRORS.get((_SERVICE_ALIASES.get(svc, svc), key))

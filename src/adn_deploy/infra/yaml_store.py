@@ -109,6 +109,9 @@ def coerce_scalar_value(key: str, value: Any) -> Any:
         "MAX_LOGINS_PER_MINUTE",
         "SMS_PREAMBLES",
         "LOCATION_DST",
+        # ADN_PANEL (adn-server.yaml): type-checked at start-up
+        "REPORT_INTERVAL",
+        "ODTP_PORT",
     ):
         if low.isdigit():
             return int(low)

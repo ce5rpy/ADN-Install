@@ -55,6 +55,17 @@ If your server or your cloud provider has a firewall, open:
 | `62032/udp` | OpenBridge links to other servers |
 | `54006/udp` | Phone apps and IP terminals (ODTP) |
 
+## Connect to the ADN panel
+
+So the ADN panel shows your server (version, ports, links, ODTP), on your server's page in the sysop panel generate a **token**; the panel also shows the **endpoint**. Then:
+
+```bash
+sudo adn-docker menu      # Docker
+sudo adn-deploy menu      # Bare metal
+```
+
+Go to **Server (DMR peer) → Configure → Change a variable**, fill in `ADN_PANEL.ENDPOINT` and `ADN_PANEL.TOKEN`, then go back and choose **Restart container** (Docker) or **Reload config** (bare metal). The ODTP port is filled in for you.
+
 ## Update
 
 **Docker:**

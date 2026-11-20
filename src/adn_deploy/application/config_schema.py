@@ -28,6 +28,11 @@ COMMON_VARS: dict[str, list[VarMeta]] = {
         VarMeta("GLOBAL.PASS_SECURITY", "Key download password", ""),
         VarMeta("ALIASES.PEER_URL", "Peer list URL", "https://servers.adn.systems/peer_ids.json"),
         VarMeta("REPORTS.REPORT_PORT", "Reports TCP port", "4321"),
+        # ADN panel report: endpoint + token come from this server's page in the sysop
+        # panel; ODTP_PORT is filled in by the toolkit (public ODTP port).
+        VarMeta("ADN_PANEL.ENDPOINT", "ADN panel endpoint (shown in the panel with the token)", ""),
+        VarMeta("ADN_PANEL.TOKEN", "ADN panel API token (from the sysop panel)", ""),
+        VarMeta("ADN_PANEL.REPORT_INTERVAL", "ADN panel report interval (seconds, 60-86400)", "300"),
     ],
     "adn-echo": [
         VarMeta("SYSTEMS.ECHO.MASTER_IP", "Echo master IP (adn-server)", "127.0.0.1"),

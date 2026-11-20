@@ -55,6 +55,17 @@ Si tu servidor o tu proveedor cloud tiene cortafuegos, abre:
 | `62032/udp` | Enlaces OpenBridge con otros servidores |
 | `54006/udp` | Apps de móvil y terminales IP (ODTP) |
 
+## Conectar con el panel ADN
+
+Para que el panel ADN muestre tu servidor (versión, puertos, enlaces, ODTP), genera un **token** en la página de tu servidor del panel de sysops; el panel también muestra el **endpoint**. Después:
+
+```bash
+sudo adn-docker menu      # Docker
+sudo adn-deploy menu      # Bare metal
+```
+
+Entra en **Server (DMR peer) → Configure → Change a variable**, completa `ADN_PANEL.ENDPOINT` y `ADN_PANEL.TOKEN`, y después vuelve atrás y elige **Restart container** (Docker) o **Reload config** (bare metal). El puerto ODTP se completa solo.
+
 ## Actualizar
 
 **Docker:**
