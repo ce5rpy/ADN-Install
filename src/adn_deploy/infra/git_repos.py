@@ -599,6 +599,12 @@ def git_pull_deploy(settings: Settings | None = None) -> bool:
         saved = _save_toolkit_changes(cfg, g, status.stdout)
         if saved is None:
             return False
+    # A clone made at a tag (`git clone -b v2.6.0`, older installers) fetches only that
+    # tag, so origin/<branch> never appears: fetch every branch again.
+    refspec = "+refs/heads/*:refs/remotes/origin/*"
+    if refspec not in g("config", "--get-all", "remote.origin.fetch").stdout.split():
+        g("config", "--replace-all", "remote.origin.fetch", refspec)
+        print("  deploy: origin set to fetch every branch (the clone followed a single tag)")
     proc = g("fetch", "--prune", "origin")
     if proc.returncode != 0:
         _git_fail("deploy", "git fetch origin failed", proc)

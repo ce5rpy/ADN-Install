@@ -4,6 +4,13 @@ All notable changes to **ADN-Install** (adn-deploy toolkit) are documented here.
 
 <!-- version list -->
 
+## v2.9.1 (2026-11-21)
+
+### Bug Fixes
+
+- **update**: Toolkit clones made at a tag fetch every branch again
+
+
 ## v2.9.0 (2026-11-21)
 
 ### Features
