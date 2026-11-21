@@ -35,6 +35,26 @@ sudo adn-docker setup     # Docker
 sudo adn-deploy wizard    # Bare metal
 ```
 
+### Development version (`develop`)
+
+Only for **testing** the next version: it may contain bugs. Do not use it on a production server.
+
+**Docker:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/docker-install.sh | sudo env DOCKER_TAG_SERVER=develop DOCKER_TAG_MONITOR=develop bash
+```
+
+**Bare metal** (three commands, in this order):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.sh | sudo env ADN_DEPLOY_BOOTSTRAP_ONLY=1 bash
+printf 'GIT_BRANCH_PEER="develop"\nGIT_BRANCH_MONITOR="develop"\n' | sudo tee -a /opt/ADN-Install/deploy.conf
+sudo bash /opt/ADN-Install/install/install.sh
+```
+
+To move an existing server to `develop`, or back to the stable version, see the [advanced guide](README.advanced.md#development-version-develop).
+
 ## Check that it works
 
 ```bash

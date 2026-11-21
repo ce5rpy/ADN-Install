@@ -127,6 +127,67 @@ adn-docker menu     # ssl enable cuando esté listo
 
 Ver [install-docker/README.es.md](install-docker/README.es.md) para la estructura en el host y la solución de problemas.
 
+## Versión de desarrollo (`develop`)
+
+`develop` es la rama de integración de ADN-DMR-Peer-Server y ADN-Monitor: lo que entrará en su próxima versión. Úsala para probar; los servidores en producción deben quedarse en la versión estable (la opción por defecto).
+
+Solo cambian el servidor DMR y el monitor. El toolkit (`/opt/ADN-Install`) y las imágenes `adn-deploy-cli` y `daprs` son los mismos en ambos casos.
+
+| | Estable (por defecto) | Desarrollo |
+|---|---|---|
+| Bare metal: `GIT_BRANCH_PEER`, `GIT_BRANCH_MONITOR` en `deploy.conf` | sin definir (`master`) | `develop` |
+| Docker: imágenes en `/opt/adn-docker/.env` | `adn-server:latest`, `adn-monitor:latest` | `adn-server:develop`, `adn-monitor:develop` |
+
+Las imágenes `:develop` se reconstruyen con cada cambio en `develop`. Cada build queda también disponible como `:develop-<commit>` (por ejemplo `adn-server:develop-c0f9f64`), para mantener un servidor en un build concreto.
+
+### Bare metal
+
+**Instalación nueva:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.sh | sudo env ADN_DEPLOY_BOOTSTRAP_ONLY=1 bash
+printf 'GIT_BRANCH_PEER="develop"\nGIT_BRANCH_MONITOR="develop"\n' | sudo tee -a /opt/ADN-Install/deploy.conf
+sudo bash /opt/ADN-Install/install/install.sh
+```
+
+**Servidor ya instalado → `develop`:**
+
+```bash
+sudo adn-deploy config set deploy GIT_BRANCH_PEER develop
+sudo adn-deploy config set deploy GIT_BRANCH_MONITOR develop
+sudo adn-deploy update
+```
+
+A partir de ahí, cada `sudo adn-deploy update` pasa al último commit de `develop`.
+
+**Volver a la versión estable:** los mismos comandos con `master` (o un tag de versión como `v2.7.0`) en lugar de `develop`. La configuración se conserva, como se explica en [Versiones](#versiones).
+
+### Docker
+
+**Instalación nueva:**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/docker-install.sh | sudo env DOCKER_TAG_SERVER=develop DOCKER_TAG_MONITOR=develop bash
+```
+
+**Servidor ya instalado → `develop`:** volver a ejecutar el instalador conserva el `.env` actual, así que hay que cambiar ahí las dos imágenes:
+
+```bash
+sudo sed -i -E 's#^(DOCKER_TAG_(SERVER|MONITOR))=.*#\1=develop#; s#^(ADN_IMAGE_SERVER=.*/adn-server):.*#\1:develop#; s#^(ADN_IMAGE_MONITOR=.*/adn-monitor):.*#\1:develop#' /opt/adn-docker/.env
+sudo adn-docker update
+```
+
+A partir de ahí, cada `sudo adn-docker update` descarga la imagen `develop` más reciente.
+
+**Volver a la versión estable:**
+
+```bash
+sudo sed -i -E 's#^(DOCKER_TAG_(SERVER|MONITOR))=.*#\1=latest#; s#^(ADN_IMAGE_SERVER=.*/adn-server):.*#\1:latest#; s#^(ADN_IMAGE_MONITOR=.*/adn-monitor):.*#\1:latest#' /opt/adn-docker/.env
+sudo adn-docker update
+```
+
+Para ver qué imágenes están corriendo: `docker ps --format '{{.Names}} {{.Image}}'`.
+
 ## Arquitectura (bare metal)
 
 | Componente | Función |

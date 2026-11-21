@@ -4,6 +4,13 @@ All notable changes to **ADN-Install** (adn-deploy toolkit) are documented here.
 
 <!-- version list -->
 
+## v2.8.4 (2026-11-21)
+
+### Bug Fixes
+
+- **docs**: Install the development version (develop)
+
+
 ## v2.8.3 (2026-11-21)
 
 ### Bug Fixes
