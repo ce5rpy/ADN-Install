@@ -4,6 +4,13 @@ All notable changes to **ADN-Install** (adn-deploy toolkit) are documented here.
 
 <!-- version list -->
 
+## v2.8.3 (2026-11-21)
+
+### Bug Fixes
+
+- **ci**: Actions on Node 24; ADN-Install manual releases keep Latest
+
+
 ## v2.8.2 (2026-11-21)
 
 ### Bug Fixes
