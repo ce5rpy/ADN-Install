@@ -1,0 +1,95 @@
+# Release workflow (ADN-Install)
+#
+#   master: the version in pyproject.toml gets its tag (vX.Y.Z) and a GitHub Release
+#   (title X.Y.Z, notes from CHANGELOG.md). The content itself is published here by
+#   the adn-deploy toolkit's release pipeline; this workflow only versions it.
+#
+#   Run it by hand with a version (e.g. 2.7.0) to create the release of an existing tag.
+
+name: release
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Existing version to create the release for (e.g. 2.7.0); empty = pyproject.toml"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check installer scripts
+        run: |
+          set -euo pipefail
+          git ls-files -z '*.sh' sbin/adn-deploy install-docker/bin/adn-docker-standalone \
+            | xargs -0 -n1 bash -n
+          echo "Shell syntax OK"
+
+      - name: Version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          version="${INPUT_VERSION#v}"
+          if [[ -z "$version" ]]; then
+            version="$(sed -n 's/^version = "\([^"]*\)".*/\1/p' pyproject.toml | head -n1)"
+          fi
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "::error::bad version '$version'"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Tag $TAG already exists"
+            exit 0
+          fi
+          if [[ -n "$INPUT_VERSION" ]]; then
+            echo "::error::tag $TAG does not exist (a manual run only creates releases for existing tags)"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "refs/tags/$TAG"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release already exists for $TAG"
+            exit 0
+          fi
+          notes="$(mktemp)"
+          # The "## vX.Y.Z (date)" section of CHANGELOG.md, up to the next version.
+          awk -v h="## $TAG " 'index($0, h) == 1 {on = 1} on && /^## v/ && index($0, h) != 1 {exit} on' \
+            CHANGELOG.md > "$notes" 2>/dev/null || true
+          [[ -s "$notes" ]] || printf 'Release %s\n' "$VERSION" > "$notes"
+          gh release create "$TAG" --verify-tag --title "$VERSION" --notes-file "$notes"
+          gh release view "$TAG" --json url -q .url

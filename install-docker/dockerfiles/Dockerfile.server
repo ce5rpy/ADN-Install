@@ -1,0 +1,56 @@
+# ADN DMR server image (adn-server + adn-echo share this build; different CMD).
+# syntax=docker/dockerfile:1
+
+FROM python:3.13-slim-trixie AS builder
+
+ARG BUILD_JOBS=4
+ENV MAKEFLAGS=-j${BUILD_JOBS} CMAKE_BUILD_PARALLEL_LEVEL=${BUILD_JOBS}
+
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    git ca-certificates gcc libc6-dev libffi-dev default-libmysqlclient-dev pkg-config \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+
+ARG GIT_URL_PEER=https://github.com/Amateur-Digital-Network/ADN-DMR-Peer-Server.git
+ARG GIT_BRANCH_PEER=
+RUN --mount=type=cache,target=/root/.cache/pip \
+    if [ -n "$GIT_BRANCH_PEER" ]; then \
+      git clone --depth 1 -b "$GIT_BRANCH_PEER" "$GIT_URL_PEER" adn-dmr-server; \
+    else \
+      git clone --depth 1 "$GIT_URL_PEER" adn-dmr-server; \
+    fi \
+  && rm -rf adn-dmr-server/.git \
+  && pip install --prefer-binary --no-cache-dir --prefix=/install \
+       -r adn-dmr-server/requirements.txt \
+       mysqlclient
+
+FROM python:3.13-slim-trixie
+
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    ca-certificates ffmpeg default-libmysqlclient-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV ADN_ROOT=/opt \
+    ADN_DMR_SERVER_PATH=/opt/adn-dmr-server \
+    PYTHONUNBUFFERED=1
+WORKDIR /opt
+
+COPY --from=builder /opt/adn-dmr-server /opt/adn-dmr-server
+COPY --from=builder /install/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /install/bin /usr/local/bin
+
+COPY pyproject.toml /tmp/adn-deploy/pyproject.toml
+COPY src /tmp/adn-deploy/src
+RUN pip install --no-cache-dir /tmp/adn-deploy \
+  && rm -rf /tmp/adn-deploy
+
+COPY install-docker/scripts/common.sh /usr/local/lib/adn-docker/common.sh
+COPY install-docker/scripts/entrypoint-server.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh /usr/local/lib/adn-docker/common.sh
+
+EXPOSE 4321
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["server"]

@@ -1,0 +1,89 @@
+# ADN Monitor — unified FastAPI + built SPA (port 8080).
+# syntax=docker/dockerfile:1
+
+FROM node:22-bookworm-slim AS frontend
+
+ARG BUILD_JOBS=4
+ENV npm_config_jobs=${BUILD_JOBS}
+
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    git ca-certificates \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /src
+
+ARG GIT_URL_MONITOR=https://github.com/Amateur-Digital-Network/ADN-Monitor.git
+ARG GIT_BRANCH_MONITOR=
+RUN --mount=type=cache,target=/root/.npm \
+    if [ -n "$GIT_BRANCH_MONITOR" ]; then \
+      git clone --depth 1 -b "$GIT_BRANCH_MONITOR" "$GIT_URL_MONITOR" adn-monitor; \
+    else \
+      git clone --depth 1 "$GIT_URL_MONITOR" adn-monitor; \
+    fi \
+  && rm -rf adn-monitor/.git \
+  && cd adn-monitor/frontend \
+  && npm ci \
+  && npm run build
+
+FROM python:3.13-slim-trixie AS builder
+
+ARG BUILD_JOBS=4
+ENV MAKEFLAGS=-j${BUILD_JOBS}
+
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    git ca-certificates gcc libc6-dev libffi-dev default-libmysqlclient-dev pkg-config \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /opt
+
+ARG GIT_URL_MONITOR=https://github.com/Amateur-Digital-Network/ADN-Monitor.git
+ARG GIT_BRANCH_MONITOR=
+ARG TARGETPLATFORM
+RUN --mount=type=cache,target=/root/.cache/pip \
+    if [ -n "$GIT_BRANCH_MONITOR" ]; then \
+      git clone --depth 1 -b "$GIT_BRANCH_MONITOR" "$GIT_URL_MONITOR" adn-monitor; \
+    else \
+      git clone --depth 1 "$GIT_URL_MONITOR" adn-monitor; \
+    fi \
+  && rm -rf adn-monitor/.git \
+  && if [ "$TARGETPLATFORM" = "linux/arm/v7" ]; then \
+       sed -E 's/uvicorn\[standard\]/uvicorn/g; /^uvloop/d' adn-monitor/monitor/requirements.txt > /tmp/requirements.txt; \
+     else \
+       cp adn-monitor/monitor/requirements.txt /tmp/requirements.txt; \
+     fi \
+  && pip install --prefer-binary --no-cache-dir --prefix=/install \
+       -r /tmp/requirements.txt \
+       itsdangerous
+
+FROM python:3.13-slim-trixie
+
+RUN apt-get update \
+  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    ca-certificates default-libmysqlclient-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+ENV ADN_MONITOR_PATH=/opt/adn-monitor \
+    MONITOR_APP_PORT=8080 \
+    PYTHONUNBUFFERED=1
+WORKDIR /opt
+
+COPY --from=builder /opt/adn-monitor /opt/adn-monitor
+COPY --from=builder /install/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
+COPY --from=builder /install/bin /usr/local/bin
+COPY --from=frontend /src/adn-monitor/frontend/dist /opt/adn-monitor/frontend/dist
+
+COPY pyproject.toml /tmp/adn-deploy/pyproject.toml
+COPY src /tmp/adn-deploy/src
+RUN pip install --no-cache-dir /tmp/adn-deploy \
+  && rm -rf /tmp/adn-deploy
+
+COPY install-docker/scripts/common.sh /usr/local/lib/adn-docker/common.sh
+COPY install-docker/scripts/run-monitor.py /usr/local/lib/adn-docker/run-monitor.py
+COPY install-docker/scripts/entrypoint-monitor.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh /usr/local/lib/adn-docker/common.sh /usr/local/lib/adn-docker/run-monitor.py
+
+EXPOSE 8080
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["monitor"]
