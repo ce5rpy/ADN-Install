@@ -36,7 +36,9 @@ curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.s
 curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/docker-install.sh | sudo env ADN_VERSION=develop bash
 ```
 
-**Installed server** — the same command on both (`adn-deploy` on bare metal, `adn-docker` on Docker):
+**Installed server** — the same command and values on both.
+
+**Bare metal:**
 
 ```bash
 sudo adn-deploy version                  # show the current versions
@@ -44,6 +46,16 @@ sudo adn-deploy version develop          # both apps to develop
 sudo adn-deploy version 2.6.1            # both apps to 2.6.1 (downgrade)
 sudo adn-deploy version --server 2.7.0   # one app only (or --monitor)
 sudo adn-deploy version stable           # back to the latest release
+```
+
+**Docker:**
+
+```bash
+sudo adn-docker version                  # show the current versions
+sudo adn-docker version develop          # both apps to develop
+sudo adn-docker version 2.6.1            # both apps to 2.6.1 (downgrade)
+sudo adn-docker version --server 2.7.0   # one app only (or --monitor)
+sudo adn-docker version stable           # back to the latest release
 ```
 
 The command checks that the version exists (git tag or branch, or Docker image) before changing anything, saves it and runs the update. From then on, each `update` stays on that version (`develop` moves to its newest commit or image).

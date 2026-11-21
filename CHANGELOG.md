@@ -4,6 +4,13 @@ All notable changes to **ADN-Install** (adn-deploy toolkit) are documented here.
 
 <!-- version list -->
 
+## v2.9.2 (2026-11-21)
+
+### Bug Fixes
+
+- **docs**: Version commands for Docker in the advanced README
+
+
 ## v2.9.1 (2026-11-21)
 
 ### Bug Fixes
