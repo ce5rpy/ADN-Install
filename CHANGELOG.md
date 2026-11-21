@@ -4,6 +4,13 @@ All notable changes to **ADN-Install** (adn-deploy toolkit) are documented here.
 
 <!-- version list -->
 
+## v2.9.3 (2026-11-21)
+
+### Bug Fixes
+
+- **docker**: Build the exact app commit, not a cached clone of the branch
+
+
 ## v2.9.2 (2026-11-21)
 
 ### Bug Fixes

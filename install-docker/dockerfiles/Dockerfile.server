@@ -15,8 +15,15 @@ WORKDIR /opt
 
 ARG GIT_URL_PEER=https://github.com/Amateur-Digital-Network/ADN-DMR-Peer-Server.git
 ARG GIT_BRANCH_PEER=
+# GIT_COMMIT_*: the exact commit to build. It also keys the layer cache: a clone of a
+# moving branch (develop) would otherwise be served from the cache of an older build.
+ARG GIT_COMMIT_PEER=
 RUN --mount=type=cache,target=/root/.cache/pip \
-    if [ -n "$GIT_BRANCH_PEER" ]; then \
+    if [ -n "$GIT_COMMIT_PEER" ]; then \
+      git init -q adn-dmr-server \
+      && git -C adn-dmr-server fetch -q --depth 1 "$GIT_URL_PEER" "$GIT_COMMIT_PEER" \
+      && git -C adn-dmr-server checkout -q FETCH_HEAD; \
+    elif [ -n "$GIT_BRANCH_PEER" ]; then \
       git clone --depth 1 -b "$GIT_BRANCH_PEER" "$GIT_URL_PEER" adn-dmr-server; \
     else \
       git clone --depth 1 "$GIT_URL_PEER" adn-dmr-server; \

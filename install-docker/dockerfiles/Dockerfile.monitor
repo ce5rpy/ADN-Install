@@ -15,8 +15,15 @@ WORKDIR /src
 
 ARG GIT_URL_MONITOR=https://github.com/Amateur-Digital-Network/ADN-Monitor.git
 ARG GIT_BRANCH_MONITOR=
+# GIT_COMMIT_*: the exact commit to build. It also keys the layer cache: a clone of a
+# moving branch (develop) would otherwise be served from the cache of an older build.
+ARG GIT_COMMIT_MONITOR=
 RUN --mount=type=cache,target=/root/.npm \
-    if [ -n "$GIT_BRANCH_MONITOR" ]; then \
+    if [ -n "$GIT_COMMIT_MONITOR" ]; then \
+      git init -q adn-monitor \
+      && git -C adn-monitor fetch -q --depth 1 "$GIT_URL_MONITOR" "$GIT_COMMIT_MONITOR" \
+      && git -C adn-monitor checkout -q FETCH_HEAD; \
+    elif [ -n "$GIT_BRANCH_MONITOR" ]; then \
       git clone --depth 1 -b "$GIT_BRANCH_MONITOR" "$GIT_URL_MONITOR" adn-monitor; \
     else \
       git clone --depth 1 "$GIT_URL_MONITOR" adn-monitor; \
@@ -40,9 +47,16 @@ WORKDIR /opt
 
 ARG GIT_URL_MONITOR=https://github.com/Amateur-Digital-Network/ADN-Monitor.git
 ARG GIT_BRANCH_MONITOR=
+# GIT_COMMIT_*: the exact commit to build. It also keys the layer cache: a clone of a
+# moving branch (develop) would otherwise be served from the cache of an older build.
+ARG GIT_COMMIT_MONITOR=
 ARG TARGETPLATFORM
 RUN --mount=type=cache,target=/root/.cache/pip \
-    if [ -n "$GIT_BRANCH_MONITOR" ]; then \
+    if [ -n "$GIT_COMMIT_MONITOR" ]; then \
+      git init -q adn-monitor \
+      && git -C adn-monitor fetch -q --depth 1 "$GIT_URL_MONITOR" "$GIT_COMMIT_MONITOR" \
+      && git -C adn-monitor checkout -q FETCH_HEAD; \
+    elif [ -n "$GIT_BRANCH_MONITOR" ]; then \
       git clone --depth 1 -b "$GIT_BRANCH_MONITOR" "$GIT_URL_MONITOR" adn-monitor; \
     else \
       git clone --depth 1 "$GIT_URL_MONITOR" adn-monitor; \
