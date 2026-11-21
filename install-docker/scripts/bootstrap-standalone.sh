@@ -87,9 +87,22 @@ else
   rm -f "$_env_lib" "$_tag_lib"
 fi
 
+# App versions (same variables and values as bare metal): ADN_VERSION for both apps,
+# ADN_SERVER_VERSION / ADN_MONITOR_VERSION for one; stable (default) | develop | X.Y.Z.
+for _comp in SERVER MONITOR; do
+  _v_var="ADN_${_comp}_VERSION"
+  _v="${!_v_var:-${ADN_VERSION:-}}"
+  [[ -n "$_v" ]] || continue
+  _tag="$(adn_version_to_image_tag "$_v")" || {
+    [[ -n "${!_v_var:-}" ]] || _v_var=ADN_VERSION
+    echo "ERROR: ${_v_var} must be stable, develop or X.Y.Z (got '$_v')" >&2
+    exit 1
+  }
+  export "DOCKER_TAG_${_comp}=${_tag}"
+done
+
 # Every image follows :latest (the newest final release of each component on the
-# registry). `adn-docker up` pulls again, so it also updates. Pin a component at
-# install time with e.g. DOCKER_TAG_SERVER=2.5.5.
+# registry). `adn-docker up` pulls again, so it also updates.
 for _tag_var in DOCKER_TAG_SERVER DOCKER_TAG_MONITOR DOCKER_TAG_DAPRS DOCKER_TAG_DEPLOY_CLI; do
   if [[ -z "${!_tag_var:-}" || "${!_tag_var}" == auto ]]; then
     export "${_tag_var}=latest"
@@ -107,6 +120,10 @@ ADN_DOCKER_STATE=${STATE}
 
 DOCKER_REGISTRY=${registry}
 ADN_RELEASE_CHANNEL=${ADN_RELEASE_CHANNEL:-auto}
+# App versions: stable | develop | X.Y.Z (change with: adn-docker version ...)
+ADN_VERSION=${ADN_VERSION:-stable}
+ADN_SERVER_VERSION=${ADN_SERVER_VERSION:-}
+ADN_MONITOR_VERSION=${ADN_MONITOR_VERSION:-}
 DOCKER_TAG_SERVER=${DOCKER_TAG_SERVER}
 DOCKER_TAG_MONITOR=${DOCKER_TAG_MONITOR}
 DOCKER_TAG_DAPRS=${DOCKER_TAG_DAPRS}

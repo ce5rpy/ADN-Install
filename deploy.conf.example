@@ -21,11 +21,15 @@ GIT_URL_DEPLOY="https://github.com/ce5rpy/ADN-Install.git"
 GIT_URL_PEER="https://github.com/Amateur-Digital-Network/ADN-DMR-Peer-Server.git"
 GIT_URL_MONITOR="https://github.com/Amateur-Digital-Network/ADN-Monitor.git"
 GIT_URL_DAPRS="https://gitlab.com/C31AG/hbnet.git"
-# Optional git branches for ce5rpy repos. Leave unset or empty to clone/fetch the
-# remote default branch (git remote HEAD). Set only when you need a specific ref.
+# App versions (the same variables and values as Docker): stable (latest release,
+# default) | develop | X.Y.Z. ADN_VERSION sets both apps; ADN_SERVER_VERSION /
+# ADN_MONITOR_VERSION set one. Change them with: adn-deploy version develop|stable|X.Y.Z
+# ADN_VERSION="stable"
+# ADN_SERVER_VERSION=""
+# ADN_MONITOR_VERSION=""
+# GIT_BRANCH_PEER / GIT_BRANCH_MONITOR (older pins: a branch, tag or commit) still
+# work when no ADN_*_VERSION is set.
 # GIT_BRANCH_DEPLOY=""
-# GIT_BRANCH_PEER=""
-# GIT_BRANCH_MONITOR=""
 GIT_BRANCH_DAPRS="aprs_features"
 # DAPRS_DATA_DMR_ID="900999"  # gateway DATA_DMR_ID + peer RADIO_ID (must match)
 # DAPRS_PEER_PORT="54871"       # local UDP for hbnet peer (master stays :52555 on adn-server)

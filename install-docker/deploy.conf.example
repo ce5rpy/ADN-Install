@@ -28,8 +28,7 @@ HBP_PASSPHRASE="passw0rd"
 MYSQL_DB_NAME="hbmon"
 MYSQL_DB_USER="self_service_user"
 
-# Image tags (see .env for full image refs)
-# DOCKER_TAG_SERVER="auto"
-# DOCKER_TAG_MONITOR="auto"
+# App versions live in .env: ADN_VERSION, ADN_SERVER_VERSION, ADN_MONITOR_VERSION
+# (stable | develop | X.Y.Z). Change them with: adn-docker version develop|stable|X.Y.Z
 # ADN_RELEASE_CHANNEL="auto"
 DOCKER_REGISTRY="docker.io/ce5rpy"

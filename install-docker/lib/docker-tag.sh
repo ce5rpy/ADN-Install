@@ -169,6 +169,23 @@ adn_docker_default_tag() {
   printf '%s' "$ADN_DOCKER_FALLBACK_TAG"
 }
 
+# App version (ADN_VERSION, ADN_SERVER_VERSION, ADN_MONITOR_VERSION; the same values as
+# bare metal) -> image tag: stable -> latest, develop -> develop, [v]X.Y.Z -> X.Y.Z.
+adn_version_to_image_tag() {
+  local v="${1,,}"
+  v="${v#"${v%%[![:space:]]*}"}"
+  v="${v%"${v##*[![:space:]]}"}"
+  case "$v" in
+    stable|latest|master) printf 'latest' ;;
+    develop) printf 'develop' ;;
+    *)
+      v="${v#v}"
+      [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+      printf '%s' "$v"
+      ;;
+  esac
+}
+
 adn_docker_image_tag() {
   case "$1" in
     adn-server|server) printf '%s' "${DOCKER_TAG_SERVER:-}" ;;

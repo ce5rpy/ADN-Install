@@ -374,6 +374,12 @@ adn_docker_update() {
   docker image prune -f >/dev/null 2>&1 || true  # superseded (dangling) layers only
   after_srv="$(adn_docker_running_version adn-server /opt/adn-dmr-server/pyproject.toml)"
   after_mon="$(adn_docker_running_version adn-monitor /opt/adn-monitor/pyproject.toml)"
+  # The ODTP gateway exists from adn-server 2.7.0; an older image (adn-docker version
+  # 2.6.1) cannot run it and would restart it in a loop.
+  if [[ -n "$after_srv" && "$(printf '%s\n' 2.7.0 "$after_srv" | sort -V | head -n1)" != "2.7.0" ]]; then
+    adn_docker_compose rm -sf adn-odtp >/dev/null 2>&1 || true
+    echo "  adn-odtp: not available in adn-server ${after_srv} (needs 2.7.0 or newer) — stopped"
+  fi
   echo ""
   printf '  %-12s %s\n' "adn-server" "${before_srv:-?} -> ${after_srv:-?}"
   printf '  %-12s %s\n' "adn-monitor" "${before_mon:-?} -> ${after_mon:-?}"
@@ -675,12 +681,126 @@ adn_docker_load_conf() {
   fi
 }
 
+# App versions (same variables, values and command as bare metal `adn-deploy version`):
+#   ADN_VERSION (both apps), ADN_SERVER_VERSION, ADN_MONITOR_VERSION in .env
+#   values: stable (:latest) | develop (:develop) | X.Y.Z (:X.Y.Z)
+adn_docker_version_tag() {
+  local v="${1,,}"
+  case "$v" in
+    stable|latest|master) printf 'latest' ;;
+    develop) printf 'develop' ;;
+    *)
+      v="${v#v}"
+      [[ "$v" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || return 1
+      printf '%s' "$v"
+      ;;
+  esac
+}
+
+adn_docker_version_name() {
+  case "$1" in
+    latest) printf 'stable' ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+adn_docker_env_get() {
+  sed -n "s/^$2=//p" "$1" | tail -n1 | tr -d '"'
+}
+
+adn_docker_env_set() {
+  local envf="$1" key="$2" val="$3"
+  if grep -qE "^${key}=" "$envf"; then
+    sed -i -E "s#^${key}=.*#${key}=${val}#" "$envf"
+  else
+    printf '%s=%s\n' "$key" "$val" >>"$envf"
+  fi
+}
+
+adn_docker_version_show() {
+  local envf="$1" comp key img tag
+  for comp in SERVER MONITOR; do
+    key="adn-${comp,,}"
+    img="$(adn_docker_env_get "$envf" "ADN_IMAGE_${comp}")"
+    tag="${img##*:}"
+    printf '  %s: %s  [%s]\n' "$key" "$(adn_docker_version_name "${tag:-latest}")" "${img:-?}"
+  done
+  echo "Change with: adn-docker version stable|develop|X.Y.Z [--server V] [--monitor V]"
+}
+
+adn_docker_version() {
+  local both="" server="" monitor="" envf reg comp v tag img cur
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --server) server="${2:-}"; shift ;;
+      --monitor) monitor="${2:-}"; shift ;;
+      -h|--help) echo "usage: adn-docker version [stable|develop|X.Y.Z] [--server V] [--monitor V]"; return 0 ;;
+      -*) echo "adn-docker version: unknown option $1" >&2; return 2 ;;
+      *) both="$1" ;;
+    esac
+    shift
+  done
+  envf="${ADN_DOCKER_ENV_FILE:-$(adn_docker_root)/.env}"
+  [[ -f "$envf" ]] || { echo "adn-docker: missing $envf" >&2; return 1; }
+  if [[ -z "$both$server$monitor" ]]; then
+    adn_docker_version_show "$envf"
+    return 0
+  fi
+
+  reg="${DOCKER_REGISTRY:-docker.io/ce5rpy}"
+  reg="${reg%/}"
+  declare -A want=()
+  for comp in SERVER MONITOR; do
+    v="$both"
+    [[ "$comp" == SERVER && -n "$server" ]] && v="$server"
+    [[ "$comp" == MONITOR && -n "$monitor" ]] && v="$monitor"
+    [[ -n "$v" ]] || continue
+    tag="$(adn_docker_version_tag "$v")" || {
+      echo "adn-docker: version must be stable, develop or X.Y.Z (got '$v')" >&2
+      return 2
+    }
+    img="${reg}/adn-${comp,,}:${tag}"
+    # Before touching .env: a version that was never published must not break the stack.
+    if ! docker manifest inspect "$img" >/dev/null 2>&1; then
+      echo "adn-docker: image $img not found on the registry" >&2
+      return 1
+    fi
+    want[$comp]="$tag"
+  done
+
+  [[ -n "$both" ]] && adn_docker_env_set "$envf" ADN_VERSION "$(adn_docker_version_name "$(adn_docker_version_tag "$both")")"
+  for comp in "${!want[@]}"; do
+    tag="${want[$comp]}"
+    if [[ ( "$comp" == SERVER && -n "$server" ) || ( "$comp" == MONITOR && -n "$monitor" ) ]]; then
+      adn_docker_env_set "$envf" "ADN_${comp}_VERSION" "$(adn_docker_version_name "$tag")"
+    else
+      adn_docker_env_set "$envf" "ADN_${comp}_VERSION" ""
+    fi
+    adn_docker_env_set "$envf" "DOCKER_TAG_${comp}" "$tag"
+    cur="$(adn_docker_env_get "$envf" "ADN_IMAGE_${comp}")"
+    if [[ -n "$cur" ]]; then
+      img="${cur%:*}:${tag}"
+    else
+      img="${reg}/adn-${comp,,}:${tag}"
+    fi
+    adn_docker_env_set "$envf" "ADN_IMAGE_${comp}" "$img"
+    echo "  adn-${comp,,} -> $(adn_docker_version_name "$tag")"
+  done
+  # The old values are already in the environment, and compose prefers them to --env-file.
+  set -a
+  # shellcheck disable=SC1090
+  source "$envf"
+  set +a
+  adn_docker_update
+}
+
 adn_docker_help() {
   cat <<EOF
 adn-docker — ADN stack (registry, /opt/adn-docker)
 
   adn-docker up          pull images + start stack (HTTP :80)
   adn-docker update      update to the newest images (latest) and show versions
+  adn-docker version     show or change server/monitor versions: stable | develop | X.Y.Z
   adn-docker setup       mandatory wizard (SERVER_ID, title, domain)
   adn-docker doctor      health checks
   adn-docker menu        full admin menu (CLI container)
@@ -717,6 +837,9 @@ adn_docker_main() {
       ;;
     update)
       adn_docker_update "$@"
+      ;;
+    version)
+      adn_docker_version "$@"
       ;;
     down)
       adn_docker_compose down "$@"

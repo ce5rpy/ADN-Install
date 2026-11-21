@@ -4,6 +4,13 @@ All notable changes to **ADN-Install** (adn-deploy toolkit) are documented here.
 
 <!-- version list -->
 
+## v2.9.0 (2026-11-21)
+
+### Features
+
+- **version**: One way to choose app versions on bare metal and Docker
+
+
 ## v2.8.4 (2026-11-21)
 
 ### Bug Fixes

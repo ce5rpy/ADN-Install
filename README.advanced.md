@@ -4,6 +4,56 @@
 
 Full reference for the ADN installers: version pins, variables, commands and layout. For a quick install, see [README.md](README.md).
 
+## Versions: stable, develop or a specific release
+
+**Always update the toolkit first.** The `version` command and the variables below need a recent toolkit; with an old one they do nothing:
+
+```bash
+sudo adn-deploy update --toolkit   # bare metal
+sudo adn-docker update             # Docker (also updates adn-docker itself)
+```
+
+The DMR server (`adn-server`) and the monitor (`adn-monitor`) use **the same variables and values on bare metal and Docker**:
+
+| Variable | Applies to |
+|----------|------------|
+| `ADN_VERSION` | both apps |
+| `ADN_SERVER_VERSION` | adn-server only (wins over `ADN_VERSION`) |
+| `ADN_MONITOR_VERSION` | adn-monitor only (wins over `ADN_VERSION`) |
+
+| Value | Meaning | Bare metal (git) | Docker (image) |
+|-------|---------|------------------|----------------|
+| `stable` (default) | latest release | `master` | `:latest` |
+| `develop` | next version, **for testing only** | `develop` | `:develop` |
+| `X.Y.Z`, e.g. `2.7.0` | a specific release, to upgrade or downgrade | tag `vX.Y.Z` | `:X.Y.Z` |
+
+They are saved in `/opt/ADN-Install/deploy.conf` (bare metal) or `/opt/adn-docker/.env` (Docker).
+
+**New install at a version** — add the variable to the install command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.sh | sudo env ADN_VERSION=develop bash
+curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/docker-install.sh | sudo env ADN_VERSION=develop bash
+```
+
+**Installed server** — the same command on both (`adn-deploy` on bare metal, `adn-docker` on Docker):
+
+```bash
+sudo adn-deploy version                  # show the current versions
+sudo adn-deploy version develop          # both apps to develop
+sudo adn-deploy version 2.6.1            # both apps to 2.6.1 (downgrade)
+sudo adn-deploy version --server 2.7.0   # one app only (or --monitor)
+sudo adn-deploy version stable           # back to the latest release
+```
+
+The command checks that the version exists (git tag or branch, or Docker image) before changing anything, saves it and runs the update. From then on, each `update` stays on that version (`develop` moves to its newest commit or image).
+
+- **Configuration is kept.** On bare metal, `adn-server.yaml`, `adn-echo.yaml`, `adn-monitor.yaml`, `.env` and the D-APRS config/data files are backed up to `/opt/adn-backups/<repo>-<date>/` (root only) before each switch and restored afterwards. `SERVER_ID` and security settings are never reset. If tracked files in an app repo were edited by hand, the update stops for that repo — commit or stash those changes first.
+- **ODTP** (`adn-odtp`) exists from adn-server 2.7.0. With an older server it is stopped, and `doctor` warns that it is not running.
+- **`develop` images** are rebuilt on every change to `develop`; each build also stays available as `:develop-<commit>` (for example `adn-server:develop-c0f9f64`).
+- **Older settings** — `GIT_BRANCH_PEER` / `GIT_BRANCH_MONITOR` (bare metal) and `DOCKER_TAG_SERVER` / `DOCKER_TAG_MONITOR` (Docker) — still work while no `ADN_*_VERSION` is set. The `version` command replaces them.
+- **The toolkit** (`/opt/ADN-Install`) always follows `master`. To pin it at install time: `ADN_DEPLOY_REF` (branch, tag or commit).
+
 ## Updating from 2.6 to 2.7
 
 Version 2.7 adds the ODTP gateway (`adn-odtp`, UDP `54006`) for phone apps and IP terminals.
@@ -53,54 +103,13 @@ cd /opt/ADN-Install
 sudo bash install.sh
 ```
 
-### Versions
-
-By default everything installs from `master`, which always holds the latest release, the same as the Docker install. There are three independent pins, all optional:
-
-| What gets cloned | Path | Pin | Default |
-|------------------|------|-----|---------|
-| Installer toolkit | `/opt/ADN-Install` | `ADN_DEPLOY_REF` or `ADN_INSTALL_REF` (environment) | `master` |
-| DMR peer server | `/opt/adn-dmr-server` | `GIT_BRANCH_PEER` in `deploy.conf` (branch, tag or commit) | remote default (`master`) |
-| Monitor | `/opt/adn-monitor` | `GIT_BRANCH_MONITOR` in `deploy.conf` (branch, tag or commit) | remote default (`master`) |
-
-`ADN_INSTALL_REF` overrides `ADN_DEPLOY_REF` when both are set.
-
-**Install specific app versions** (2 steps):
-
-```bash
-# 1) Bootstrap the toolkit only (stops before cloning the apps)
-curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.sh \
-  | sudo env ADN_DEPLOY_BOOTSTRAP_ONLY=1 bash
-
-# 2) Pin the app versions, then complete the install (OS, pyenv, stack, wizard, services)
-sudo tee -a /opt/ADN-Install/deploy.conf <<'EOF'
-GIT_BRANCH_PEER="v2.7.0"
-GIT_BRANCH_MONITOR="v2.7.0"
-EOF
-sudo bash /opt/ADN-Install/install/install.sh
-```
-
-**Already installed — update or switch versions:**
-
-`adn-deploy update` (or re-running the installer) updates the app repos in place to the ref in `deploy.conf`: a branch, a release tag, or a commit. Without `GIT_BRANCH_*` they follow `master`.
-
-```bash
-sudo tee -a /opt/ADN-Install/deploy.conf <<'EOF'
-GIT_BRANCH_PEER="v2.5.6"
-GIT_BRANCH_MONITOR="v2.5.3"
-EOF
-sudo adn-deploy update    # fetch + checkout, pip, restart services
-```
-
-- Local config is kept: `adn-server.yaml`, `adn-echo.yaml`, `adn-monitor.yaml`, `.env` and the D-APRS config/data files are backed up to `/opt/adn-backups/<repo>-<date>/` (root only) before each switch and restored afterwards. `SERVER_ID` and security settings are never reset by an update.
-- If tracked files in an app repo were edited by hand, the update stops for that repo — commit or stash those changes first.
+### Variables
 
 | Variable | Default | When needed |
 |----------|---------|-------------|
 | `ADN_DEPLOY_REF` | `master` | Pin the `ADN-Install` toolkit to a branch, tag (`v2.7.0`) or commit |
 | `ADN_INSTALL_REF` | *(falls back to `ADN_DEPLOY_REF`)* | Same as above; wins if both set |
-| `GIT_BRANCH_PEER` | *(unset → remote default)* | Set in `deploy.conf` to install/update `adn-dmr-server` at a branch, tag (`v2.5.6`) or commit |
-| `GIT_BRANCH_MONITOR` | *(unset → remote default)* | Set in `deploy.conf` to install/update `adn-monitor` at a branch, tag (`v2.5.3`) or commit |
+| `ADN_VERSION`, `ADN_SERVER_VERSION`, `ADN_MONITOR_VERSION` | `stable` | App versions: `stable`, `develop` or `X.Y.Z` — see [Versions](#versions-stable-develop-or-a-specific-release) |
 | `ADN_DEPLOY_BOOTSTRAP_ONLY` | `0` | `1` = clone toolkit only, then edit `deploy.conf` before re-running install |
 | `ADN_USER` | `adn` | Override Linux username |
 | `ADN_USER_PASSWORD` | *(unset)* | Only when **creating** `adn` without a TTY prompt |
@@ -127,67 +136,6 @@ adn-docker menu     # ssl enable when ready
 
 See [install-docker/README.md](install-docker/README.md) for host layout and troubleshooting.
 
-## Development version (`develop`)
-
-`develop` is the integration branch of ADN-DMR-Peer-Server and ADN-Monitor: what will go into their next release. Use it to test; production servers should stay on the stable version (the default).
-
-Only the DMR server and the monitor change. The toolkit (`/opt/ADN-Install`) and the `adn-deploy-cli` and `daprs` images are the same in both cases.
-
-| | Stable (default) | Development |
-|---|---|---|
-| Bare metal: `GIT_BRANCH_PEER`, `GIT_BRANCH_MONITOR` in `deploy.conf` | unset (`master`) | `develop` |
-| Docker: images in `/opt/adn-docker/.env` | `adn-server:latest`, `adn-monitor:latest` | `adn-server:develop`, `adn-monitor:develop` |
-
-The `:develop` images are rebuilt on every change to `develop`. Each build also stays available as `:develop-<commit>` (for example `adn-server:develop-c0f9f64`), to keep a server on one specific build.
-
-### Bare metal
-
-**New install:**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.sh | sudo env ADN_DEPLOY_BOOTSTRAP_ONLY=1 bash
-printf 'GIT_BRANCH_PEER="develop"\nGIT_BRANCH_MONITOR="develop"\n' | sudo tee -a /opt/ADN-Install/deploy.conf
-sudo bash /opt/ADN-Install/install/install.sh
-```
-
-**Existing server → `develop`:**
-
-```bash
-sudo adn-deploy config set deploy GIT_BRANCH_PEER develop
-sudo adn-deploy config set deploy GIT_BRANCH_MONITOR develop
-sudo adn-deploy update
-```
-
-From then on, each `sudo adn-deploy update` moves to the newest commit on `develop`.
-
-**Back to the stable version:** the same commands with `master` (or a release tag such as `v2.7.0`) instead of `develop`. The configuration is kept, as described in [Versions](#versions).
-
-### Docker
-
-**New install:**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/docker-install.sh | sudo env DOCKER_TAG_SERVER=develop DOCKER_TAG_MONITOR=develop bash
-```
-
-**Existing server → `develop`:** running the installer again keeps the current `.env`, so change the two images there:
-
-```bash
-sudo sed -i -E 's#^(DOCKER_TAG_(SERVER|MONITOR))=.*#\1=develop#; s#^(ADN_IMAGE_SERVER=.*/adn-server):.*#\1:develop#; s#^(ADN_IMAGE_MONITOR=.*/adn-monitor):.*#\1:develop#' /opt/adn-docker/.env
-sudo adn-docker update
-```
-
-From then on, each `sudo adn-docker update` pulls the newest `develop` image.
-
-**Back to the stable version:**
-
-```bash
-sudo sed -i -E 's#^(DOCKER_TAG_(SERVER|MONITOR))=.*#\1=latest#; s#^(ADN_IMAGE_SERVER=.*/adn-server):.*#\1:latest#; s#^(ADN_IMAGE_MONITOR=.*/adn-monitor):.*#\1:latest#' /opt/adn-docker/.env
-sudo adn-docker update
-```
-
-To check which images are running: `docker ps --format '{{.Names}} {{.Image}}'`.
-
 ## Architecture (bare metal)
 
 | Component | Role |
@@ -203,7 +151,9 @@ To check which images are running: `docker ps --format '{{.Names}} {{.Image}}'`.
 | Command | Description |
 |---------|-------------|
 | `adn-deploy install` | Full install |
-| `adn-deploy update` | Update toolkit and app repos to the configured refs, keep config, restart |
+| `adn-deploy update` | Update toolkit and app repos to the configured versions, keep config, restart |
+| `adn-deploy update --toolkit` | Update the toolkit only (do this first) |
+| `adn-deploy version [stable\|develop\|X.Y.Z]` | Show or change the app versions, then update ([Versions](#versions-stable-develop-or-a-specific-release)) |
 | `adn-deploy menu` | Textual admin menu |
 | `adn-deploy doctor` | Health checks |
 | `adn-deploy stack` | git, config, systemd, web |
@@ -220,6 +170,6 @@ To check which images are running: `docker ps --format '{{.Names}} {{.Image}}'`.
 
 | Path | GitHub | Branch (`deploy.conf`) |
 |------|--------|------------------------|
-| `adn-dmr-server/` | Amateur-Digital-Network/ADN-DMR-Peer-Server | `GIT_BRANCH_PEER` |
-| `adn-monitor/` | Amateur-Digital-Network/ADN-Monitor | `GIT_BRANCH_MONITOR` |
+| `adn-dmr-server/` | Amateur-Digital-Network/ADN-DMR-Peer-Server | `ADN_SERVER_VERSION` |
+| `adn-monitor/` | Amateur-Digital-Network/ADN-Monitor | `ADN_MONITOR_VERSION` |
 | `ADN-Install/` | ce5rpy/ADN-Install (toolkit at `/opt/ADN-Install`) | `ADN_DEPLOY_REF` at install time |

@@ -97,6 +97,41 @@ if [[ "$ADN_DEPLOY_STAGING" != "1" ]]; then
   echo "Symlink: /usr/local/sbin/adn-deploy"
 fi
 
+# App versions given on the command line (env ADN_VERSION=develop, ADN_SERVER_VERSION=2.7.0,
+# ...) are kept in deploy.conf, so later `adn-deploy update` runs stay on them.
+# Values: stable | develop | X.Y.Z (same as adn-docker).
+_adn_persist_versions() {
+  local conf="${ADN_DEPLOY_CONF:-$ADN_DEPLOY_HOME/deploy.conf}" key val ex
+  [[ -n "${ADN_VERSION:-}${ADN_SERVER_VERSION:-}${ADN_MONITOR_VERSION:-}" ]] || return 0
+  for key in ADN_VERSION ADN_SERVER_VERSION ADN_MONITOR_VERSION; do
+    val="${!key:-}"
+    [[ -z "$val" || "$val" =~ ^(stable|latest|master|develop|v?[0-9]+\.[0-9]+\.[0-9]+)$ ]] || {
+      echo "ERROR: $key must be stable, develop or X.Y.Z (got '$val')" >&2
+      exit 1
+    }
+  done
+  if [[ ! -f "$conf" ]]; then
+    for ex in "$ADN_DEPLOY_HOME/deploy.conf.example" "$ADN_DEPLOY_HOME/templates/deploy.conf.example"; do
+      [[ -f "$ex" ]] && { cp "$ex" "$conf"; break; }
+    done
+    touch "$conf"
+    chmod 640 "$conf"
+  fi
+  for key in ADN_VERSION ADN_SERVER_VERSION ADN_MONITOR_VERSION; do
+    val="${!key:-}"
+    [[ -n "$val" ]] || continue
+    val="${val#v}"
+    if grep -qE "^${key}=" "$conf"; then
+      sed -i "s|^${key}=.*|${key}=\"${val}\"|" "$conf"
+    else
+      printf '%s="%s"\n' "$key" "$val" >>"$conf"
+    fi
+    echo "  deploy.conf: ${key}=\"${val}\""
+  done
+}
+
+_adn_persist_versions
+
 if [[ "$ADN_DEPLOY_BOOTSTRAP_ONLY" == "1" ]]; then
   echo "Bootstrap only — toolkit ready at $ADN_DEPLOY_HOME"
   exit 0

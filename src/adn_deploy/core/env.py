@@ -102,6 +102,9 @@ KNOWN_DEPLOY_KEYS: frozenset[str] = frozenset(
         "GIT_BRANCH_DEPLOY",
         "GIT_BRANCH_PEER",
         "GIT_BRANCH_MONITOR",
+        "ADN_VERSION",
+        "ADN_SERVER_VERSION",
+        "ADN_MONITOR_VERSION",
         "GIT_URL_DAPRS",
         "GIT_BRANCH_DAPRS",
         "DAPRS_DATA_DMR_ID",
@@ -194,8 +197,12 @@ class Settings:
     git_url_peer: str = "https://github.com/Amateur-Digital-Network/ADN-DMR-Peer-Server.git"
     git_url_monitor: str = "https://github.com/Amateur-Digital-Network/ADN-Monitor.git"
     git_branch_deploy: str = ""
+    # Legacy pins (a git branch, tag or commit); ADN_*_VERSION win when set.
     git_branch_peer: str = ""
     git_branch_monitor: str = ""
+    adn_version: str = ""
+    adn_server_version: str = ""
+    adn_monitor_version: str = ""
 
     git_url_daprs: str = "https://gitlab.com/C31AG/hbnet.git"
     git_branch_daprs: str = "aprs_features"
@@ -310,6 +317,22 @@ class Settings:
             "adn_etc_root",
         }
     )
+
+    @property
+    def peer_ref(self) -> str:
+        """Git ref for adn-dmr-server: ADN_SERVER_VERSION / ADN_VERSION, else GIT_BRANCH_PEER."""
+        from adn_deploy.domain.versions import effective_version, git_ref
+
+        v = effective_version(self.adn_server_version, self.adn_version)
+        return git_ref(v) if v else self.git_branch_peer
+
+    @property
+    def monitor_ref(self) -> str:
+        """Git ref for adn-monitor: ADN_MONITOR_VERSION / ADN_VERSION, else GIT_BRANCH_MONITOR."""
+        from adn_deploy.domain.versions import effective_version, git_ref
+
+        v = effective_version(self.adn_monitor_version, self.adn_version)
+        return git_ref(v) if v else self.git_branch_monitor
 
     def apply_deploy_conf(self, conf: dict[str, str]) -> None:
         for key, value in conf.items():

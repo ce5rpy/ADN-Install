@@ -36,8 +36,9 @@ GIT_URL_DEPLOY="https://github.com/ce5rpy/ADN-Install.git"
 GIT_URL_PEER="https://github.com/Amateur-Digital-Network/ADN-DMR-Peer-Server.git"
 GIT_URL_MONITOR="https://github.com/Amateur-Digital-Network/ADN-Monitor.git"
 # GIT_BRANCH_DEPLOY=""
-# GIT_BRANCH_PEER=""
-# GIT_BRANCH_MONITOR=""
+# ADN_VERSION="stable"         # stable | develop | X.Y.Z (adn-deploy version ...)
+# ADN_SERVER_VERSION=""
+# ADN_MONITOR_VERSION=""
 # ADN_SKIP_CLONE="1"
 
 # GLOBAL.SERVER_ID: per host in $ADN_DMR_SERVER_PATH/adn-server.yaml (mandatory wizard)

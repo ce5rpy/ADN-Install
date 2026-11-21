@@ -6,6 +6,8 @@ Installs an ADN DMR server: the DMR server, the web dashboard and the gateway fo
 
 Everything you need is below. For version pins, variables and other details, see the [advanced guide](README.advanced.md).
 
+> **Already installed?** Always start by updating the toolkit, so you have the latest commands: `sudo adn-docker update` (Docker) or `sudo adn-deploy update --toolkit` (bare metal).
+
 ## What you need
 
 - A server or VM with **Debian 13** or **Ubuntu 22.04 or newer**, freshly installed.
@@ -35,25 +37,14 @@ sudo adn-docker setup     # Docker
 sudo adn-deploy wizard    # Bare metal
 ```
 
-### Development version (`develop`)
+### Development version or a specific version
 
-Only for **testing** the next version: it may contain bugs. Do not use it on a production server.
-
-**Docker:**
+Add `env ADN_VERSION=...` to the install command: `develop` for the next version (**for testing only**, it may contain bugs) or a version such as `2.7.0`. For example:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/docker-install.sh | sudo env DOCKER_TAG_SERVER=develop DOCKER_TAG_MONITOR=develop bash
+curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/docker-install.sh | sudo env ADN_VERSION=develop bash
+curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.sh | sudo env ADN_VERSION=develop bash
 ```
-
-**Bare metal** (three commands, in this order):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.sh | sudo env ADN_DEPLOY_BOOTSTRAP_ONLY=1 bash
-printf 'GIT_BRANCH_PEER="develop"\nGIT_BRANCH_MONITOR="develop"\n' | sudo tee -a /opt/ADN-Install/deploy.conf
-sudo bash /opt/ADN-Install/install/install.sh
-```
-
-To move an existing server to `develop`, or back to the stable version, see the [advanced guide](README.advanced.md#development-version-develop).
 
 ## Check that it works
 
@@ -94,9 +85,10 @@ Go to **Server (DMR peer) → Configure → Change a variable**, fill in `ADN_PA
 sudo adn-docker update
 ```
 
-**Bare metal:**
+**Bare metal** (toolkit first, then the rest):
 
 ```bash
+sudo adn-deploy update --toolkit
 sudo adn-deploy update
 ```
 
@@ -120,6 +112,17 @@ sudo adn-deploy update
 ```
 
 Then open `54006/udp` in your firewall.
+
+## Change version
+
+To try the development version, go back to an earlier version, or return to the latest one. Update the toolkit first (see [Update](#update)), then:
+
+```bash
+sudo adn-docker version develop     # Docker — or: stable, 2.7.0, ...
+sudo adn-deploy version develop     # Bare metal — same values
+```
+
+`version` alone shows the current versions; `stable` goes back to the latest release. Your settings are kept. More options in the [advanced guide](README.advanced.md#versions-stable-develop-or-a-specific-release).
 
 ## Admin menu
 

@@ -6,6 +6,8 @@ Instala un servidor DMR de ADN: el servidor DMR, el panel web y la pasarela para
 
 Aquí está todo lo necesario. Para fijar versiones, variables y otros detalles, consulta la [guía avanzada](README.advanced.es.md).
 
+> **¿Ya lo tienes instalado?** Empieza siempre actualizando el toolkit, para tener los comandos más recientes: `sudo adn-docker update` (Docker) o `sudo adn-deploy update --toolkit` (bare metal).
+
 ## Qué necesitas
 
 - Un servidor o VM con **Debian 13** o **Ubuntu 22.04 o posterior**, recién instalado.
@@ -35,25 +37,14 @@ sudo adn-docker setup     # Docker
 sudo adn-deploy wizard    # Bare metal
 ```
 
-### Versión de desarrollo (`develop`)
+### Versión de desarrollo o una versión concreta
 
-Solo para **probar** la próxima versión: puede tener errores. No la uses en un servidor en producción.
-
-**Docker:**
+Agrega `env ADN_VERSION=...` al comando de instalación: `develop` para la próxima versión (**solo para pruebas**, puede tener errores) o una versión como `2.7.0`. Por ejemplo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/docker-install.sh | sudo env DOCKER_TAG_SERVER=develop DOCKER_TAG_MONITOR=develop bash
+curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/docker-install.sh | sudo env ADN_VERSION=develop bash
+curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.sh | sudo env ADN_VERSION=develop bash
 ```
-
-**Bare metal** (tres comandos, en este orden):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ce5rpy/ADN-Install/master/install.sh | sudo env ADN_DEPLOY_BOOTSTRAP_ONLY=1 bash
-printf 'GIT_BRANCH_PEER="develop"\nGIT_BRANCH_MONITOR="develop"\n' | sudo tee -a /opt/ADN-Install/deploy.conf
-sudo bash /opt/ADN-Install/install/install.sh
-```
-
-Para pasar un servidor ya instalado a `develop`, o volver a la versión estable, consulta la [guía avanzada](README.advanced.es.md#versión-de-desarrollo-develop).
 
 ## Comprobar que funciona
 
@@ -94,9 +85,10 @@ Entra en **Server (DMR peer) → Configure → Change a variable**, completa `AD
 sudo adn-docker update
 ```
 
-**Bare metal:**
+**Bare metal** (primero el toolkit, luego el resto):
 
 ```bash
+sudo adn-deploy update --toolkit
 sudo adn-deploy update
 ```
 
@@ -120,6 +112,17 @@ sudo adn-deploy update
 ```
 
 Después abre `54006/udp` en tu cortafuegos.
+
+## Cambiar de versión
+
+Para probar la versión de desarrollo, volver a una versión anterior o regresar a la última. Primero actualiza el toolkit (ver [Actualizar](#actualizar)) y después:
+
+```bash
+sudo adn-docker version develop     # Docker — o: stable, 2.7.0, ...
+sudo adn-deploy version develop     # Bare metal — mismos valores
+```
+
+`version` sin nada muestra las versiones actuales; `stable` vuelve a la última versión publicada. Tu configuración se conserva. Más opciones en la [guía avanzada](README.advanced.es.md#versiones-estable-develop-o-una-versión-concreta).
 
 ## Menú de administración
 

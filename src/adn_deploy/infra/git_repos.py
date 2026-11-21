@@ -306,7 +306,7 @@ def clone_peer(settings: Settings | None = None) -> bool:
     if peer_tree_ok(dest):
         if repo_is_git_dir(dest) and not cfg.filegen:
             print(f"  peer: git repo at {dest} — updating")
-            return sync_repo_ref(cfg, dest, cfg.git_branch_peer, "peer", PEER_PRESERVE)
+            return sync_repo_ref(cfg, dest, cfg.peer_ref, "peer", PEER_PRESERVE)
         print(f"  peer: tree present at {dest}")
         return True
 
@@ -317,7 +317,7 @@ def clone_peer(settings: Settings | None = None) -> bool:
         if clone_peer_fixture(cfg) and peer_tree_ok(dest):
             chown_app_tree(cfg, dest)
             return True
-        try_shallow_clone(cfg, cfg.git_url_peer, cfg.git_branch_peer, dest)
+        try_shallow_clone(cfg, cfg.git_url_peer, cfg.peer_ref, dest)
         if peer_tree_ok(dest):
             chown_app_tree(cfg, dest)
             return True
@@ -332,7 +332,7 @@ def clone_peer(settings: Settings | None = None) -> bool:
     if is_dry_run(cfg):
         print(f"[dry-run] git clone {cfg.git_url_peer} -> {dest}")
     else:
-        git_clone(cfg, cfg.git_url_peer, cfg.git_branch_peer, dest)
+        git_clone(cfg, cfg.git_url_peer, cfg.peer_ref, dest)
     if not peer_tree_ok(dest):
         print(f"ERROR: peer clone finished but tree at {dest} is incomplete", file=sys.stderr)
         return False
@@ -355,7 +355,7 @@ def clone_monitor(settings: Settings | None = None) -> bool:
     if monitor_tree_ok(dest):
         if repo_is_git_dir(dest) and not cfg.filegen:
             print(f"  monitor: git repo at {dest} — updating")
-            return sync_repo_ref(cfg, dest, cfg.git_branch_monitor, "monitor", MONITOR_PRESERVE)
+            return sync_repo_ref(cfg, dest, cfg.monitor_ref, "monitor", MONITOR_PRESERVE)
         print(f"  monitor: tree present at {dest}")
         return True
 
@@ -366,7 +366,7 @@ def clone_monitor(settings: Settings | None = None) -> bool:
         if clone_monitor_fixture(cfg) and monitor_tree_ok(dest):
             chown_app_tree(cfg, dest)
             return True
-        try_shallow_clone(cfg, cfg.git_url_monitor, cfg.git_branch_monitor, dest)
+        try_shallow_clone(cfg, cfg.git_url_monitor, cfg.monitor_ref, dest)
         if monitor_tree_ok(dest):
             chown_app_tree(cfg, dest)
             return True
@@ -381,7 +381,7 @@ def clone_monitor(settings: Settings | None = None) -> bool:
     if is_dry_run(cfg):
         print(f"[dry-run] git clone {cfg.git_url_monitor} -> {dest}")
     else:
-        git_clone(cfg, cfg.git_url_monitor, cfg.git_branch_monitor, dest)
+        git_clone(cfg, cfg.git_url_monitor, cfg.monitor_ref, dest)
     if not monitor_tree_ok(dest):
         print(f"ERROR: monitor clone finished but tree at {dest} is incomplete", file=sys.stderr)
         return False
@@ -631,7 +631,7 @@ def git_pull_peer(settings: Settings | None = None) -> bool:
     dest = cfg.adn_dmr_server_path
     if not dest:
         return True
-    return sync_repo_ref(cfg, dest, cfg.git_branch_peer, "peer", PEER_PRESERVE)
+    return sync_repo_ref(cfg, dest, cfg.peer_ref, "peer", PEER_PRESERVE)
 
 
 def git_pull_monitor(settings: Settings | None = None) -> bool:
@@ -639,7 +639,7 @@ def git_pull_monitor(settings: Settings | None = None) -> bool:
     dest = cfg.adn_monitor_path
     if not dest:
         return True
-    return sync_repo_ref(cfg, dest, cfg.git_branch_monitor, "monitor", MONITOR_PRESERVE)
+    return sync_repo_ref(cfg, dest, cfg.monitor_ref, "monitor", MONITOR_PRESERVE)
 
 
 def git_pull_daprs(settings: Settings | None = None) -> bool:

@@ -57,14 +57,22 @@ Las imágenes vienen de `docker.io/ce5rpy/*` y usan el tag `latest`, que siempre
 
 | Imagen | Tag por defecto | Fijar con |
 |--------|-----------------|-----------|
-| `adn-server` | `latest` | `DOCKER_TAG_SERVER` |
-| `adn-monitor` | `latest` | `DOCKER_TAG_MONITOR` |
+| `adn-server` | `latest` | `ADN_SERVER_VERSION` (o `ADN_VERSION`) |
+| `adn-monitor` | `latest` | `ADN_MONITOR_VERSION` (o `ADN_VERSION`) |
 | `daprs` | `latest` | `DOCKER_TAG_DAPRS` |
 | `adn-deploy-cli` | `latest` | `DOCKER_TAG_DEPLOY_CLI` |
 
 Para actualizar a las imágenes más nuevas: `sudo adn-docker update`. Renueva `docker-compose.yml` y `adn-docker` desde `master` de ADN-Install (así se agregan los servicios nuevos; el compose anterior queda como `docker-compose.yml.bak`), descarga `latest`, recrea los contenedores que cambiaron y muestra las versiones en ejecución. `ADN_DOCKER_ASSETS_REF` fija otra referencia de ADN-Install (rama o tag).
 
-Para fijar una versión al instalar, por ejemplo: `sudo DOCKER_TAG_SERVER=2.5.5 bash docker-install.sh`. `DOCKER_REGISTRY` permite usar otro namespace de registry.
+Versiones de adn-server y adn-monitor: `stable` (`:latest`), `develop` (`:develop`) o `X.Y.Z`, los mismos valores que en bare metal. Al instalar: `curl ... | sudo env ADN_VERSION=develop bash`. En un servidor ya instalado:
+
+```bash
+sudo adn-docker version                  # mostrar
+sudo adn-docker version 2.6.1            # las dos aplicaciones (o: stable, develop)
+sudo adn-docker version --server 2.7.0   # solo una (o --monitor)
+```
+
+Comprueba que la imagen existe, guarda la versión en `.env` y ejecuta `adn-docker update`. Ver la [guía avanzada](../README.advanced.es.md#versiones-estable-develop-o-una-versión-concreta). `DOCKER_REGISTRY` permite usar otro namespace de registry.
 
 ## Prueba con un registry local
 

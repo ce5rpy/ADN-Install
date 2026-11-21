@@ -178,6 +178,29 @@ def update_cmd(
     raise typer.Exit(0 if ok else 1)
 
 
+@app.command("version")
+def version_cmd(
+    version: Optional[str] = typer.Argument(None, help="stable | develop | X.Y.Z (both apps)"),
+    server: Optional[str] = typer.Option(None, "--server", help="adn-server only: stable | develop | X.Y.Z"),
+    monitor: Optional[str] = typer.Option(None, "--monitor", help="adn-monitor only: stable | develop | X.Y.Z"),
+    no_update: bool = typer.Option(False, "--no-update", help="Only save the setting; apply on the next update"),
+) -> None:
+    """Show or change the adn-server / adn-monitor versions, then update."""
+    from adn_deploy.application import versions as app_versions
+    from adn_deploy.core.subprocess_runner import require_root_or_exit
+
+    cfg = _settings()
+    if not (version or server or monitor):
+        app_versions.show(cfg)
+        raise typer.Exit(0)
+    require_root_or_exit(cfg)
+    if not app_versions.set_versions(cfg, both=version or "", server=server or "", monitor=monitor or ""):
+        raise typer.Exit(1)
+    if no_update:
+        raise typer.Exit(0)
+    raise typer.Exit(0 if app_update.run(cfg, reexec=True) else 1)
+
+
 @app.command("pip")
 def pip_cmd() -> None:
     """Reinstall pip -r for enabled plugins."""
