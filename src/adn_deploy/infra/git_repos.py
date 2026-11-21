@@ -512,12 +512,64 @@ def deploy_head(settings: Settings) -> str:
     return _git(settings, dest, "rev-parse", "HEAD", user=owner).stdout.strip()
 
 
+def _own_tracked_files(dest: Path, owner: str | None, g) -> None:
+    """As root: give the checkout owner back any tracked file another user owns."""
+    if os.geteuid() != 0 or not owner or owner == "root":
+        return
+    try:
+        pw = pwd.getpwnam(owner)
+    except KeyError:
+        return
+    listed = g("ls-files", "-z")
+    if listed.returncode != 0:
+        return
+    paths: set[Path] = set()
+    for rel in filter(None, listed.stdout.split("\0")):
+        paths.add(dest / rel)
+        paths.update(dest / parent for parent in Path(rel).parents if parent != Path("."))
+    git_dir = dest / ".git"
+    if git_dir.is_dir() and not git_dir.is_symlink():
+        paths.add(git_dir)
+        paths.update(git_dir.rglob("*"))
+    fixed = 0
+    for path in paths:
+        try:
+            if path.lstat().st_uid != pw.pw_uid:
+                os.lchown(path, pw.pw_uid, pw.pw_gid)
+                fixed += 1
+        except OSError:
+            continue
+    if fixed:
+        print(f"  deploy: {fixed} toolkit path(s) given back to {owner}")
+
+
+def _save_toolkit_changes(settings: Settings, g, status: str) -> Path | None:
+    """Write the local edits to tracked toolkit files to ADN_ROOT/adn-backups/*.patch."""
+    diff = g("diff", "--binary", "HEAD")
+    if diff.returncode != 0:
+        _git_fail("deploy", "git diff failed", diff)
+        return None
+    root = settings.adn_root / "adn-backups"
+    root.mkdir(parents=True, exist_ok=True)
+    root.chmod(0o700)
+    patch = root / f"ADN-Install-local-changes-{datetime.now():%Y%m%d-%H%M%S}.patch"
+    patch.write_text(diff.stdout, encoding="utf-8")
+    print(
+        "  WARN: deploy: local changes to toolkit files were replaced by the official version:\n"
+        + "\n".join(f"    {ln}" for ln in status.splitlines())
+        + f"\n  copy of the changes: {patch}",
+        file=sys.stderr,
+    )
+    return patch
+
+
 def git_pull_deploy(settings: Settings | None = None) -> bool:
     """Update the toolkit checkout to origin/<branch> (GIT_BRANCH_DEPLOY, else the
     current branch, else the remote default branch — e.g. detached HEAD after
     install.sh). Uses checkout -B instead of pull --ff-only, so it also works
     when the remote history was rewritten. Ignored files (deploy.conf) are kept;
-    local edits to tracked files stop the update."""
+    local edits to tracked files are saved to a patch in adn-backups and replaced.
+    Mode-only changes are ignored (core.fileMode=false)."""
     cfg = settings or init_env()
     dest = cfg.adn_deploy_home
     if not (dest / ".git").is_dir():
@@ -534,17 +586,19 @@ def git_pull_deploy(settings: Settings | None = None) -> bool:
     def g(*args: str) -> subprocess.CompletedProcess[str]:
         return _git(cfg, dest, *args, user=owner)
 
+    # Files left owned by root (steps run as root) cannot be rewritten by git as the
+    # owner and stay "modified"; a chmod alone must not block the update either.
+    _own_tracked_files(dest, owner, g)
+    g("config", "core.fileMode", "false")
     status = g("status", "--porcelain", "--untracked-files=no")
     if status.returncode != 0:
         _git_fail("deploy", f"git status failed in {dest}", status)
         return False
     if status.stdout.strip():
-        print(
-            f"  ERROR: deploy: local changes to tracked files in {dest} — commit or stash them first:\n"
-            + "\n".join(f"    {ln}" for ln in status.stdout.splitlines()),
-            file=sys.stderr,
-        )
-        return False
+        # The toolkit is managed code: keep a copy of the local edits, then update.
+        saved = _save_toolkit_changes(cfg, g, status.stdout)
+        if saved is None:
+            return False
     proc = g("fetch", "--prune", "origin")
     if proc.returncode != 0:
         _git_fail("deploy", "git fetch origin failed", proc)
@@ -562,7 +616,7 @@ def git_pull_deploy(settings: Settings | None = None) -> bool:
         print(f"  ERROR: deploy: branch '{branch or '?'}' not found on origin for {dest}", file=sys.stderr)
         return False
     before = g("rev-parse", "--short", "HEAD").stdout.strip()
-    proc = g("checkout", "-q", "-B", branch, f"origin/{branch}")
+    proc = g("checkout", "-q", "-f", "-B", branch, f"origin/{branch}")
     if proc.returncode != 0:
         _git_fail("deploy", f"git checkout {branch} failed", proc)
         return False
